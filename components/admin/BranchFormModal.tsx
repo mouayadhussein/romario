@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExternalLink, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -10,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { OpeningHoursEditor } from "./OpeningHoursEditor";
 import { upsertBranch } from "@/lib/admin-actions";
 import { slugify } from "@/lib/utils";
-import { TIMEZONE_OPTIONS, type OpeningHours, type OrderingMode } from "@/lib/opening-hours";
+import { TIMEZONE_OPTIONS, type OpeningHours } from "@/lib/opening-hours";
 import type { Branch } from "@/types/database";
 
 function emptyOpeningHours(): OpeningHours {
@@ -25,6 +26,54 @@ function emptyOpeningHours(): OpeningHours {
   };
 }
 
+/** Normalize common Google Maps paste formats into a clean maps URL. */
+function normalizeGoogleMapsUrl(raw: string): string {
+  const value = raw.trim();
+  if (!value) return "";
+
+  // Already a full URL
+  try {
+    const url = new URL(value);
+
+    // https://www.google.com/maps?q=33.5,36.2
+    const q = url.searchParams.get("q");
+    if (q && /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(q)) {
+      const [lat, lng] = q.split(",").map((p) => p.trim());
+      return `https://www.google.com/maps?q=${lat},${lng}`;
+    }
+
+    // https://www.google.com/maps/@33.5,36.2,17z
+    const atMatch = url.pathname.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (atMatch) {
+      return `https://www.google.com/maps?q=${atMatch[1]},${atMatch[2]}`;
+    }
+
+    // https://www.google.com/maps/place/.../@33.5,36.2,17z
+    const placeAt = value.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (placeAt) {
+      return `https://www.google.com/maps?q=${placeAt[1]},${placeAt[2]}`;
+    }
+
+    // Keep valid Google Maps / short links as-is
+    if (
+      url.hostname.includes("google.") ||
+      url.hostname.includes("goo.gl") ||
+      url.hostname.includes("maps.app.goo.gl")
+    ) {
+      return value;
+    }
+  } catch {
+    // not a URL — maybe "lat,lng"
+  }
+
+  const coords = value.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+  if (coords) {
+    return `https://www.google.com/maps?q=${coords[1]},${coords[2]}`;
+  }
+
+  return value;
+}
+
 function emptyForm() {
   return {
     name: "",
@@ -33,10 +82,8 @@ function emptyForm() {
     phone: "",
     whatsapp_number: "",
     map_url: "",
-    working_hours: "",
     opening_hours: emptyOpeningHours(),
     timezone: "Asia/Damascus",
-    ordering_mode: "auto" as OrderingMode,
     is_active: true,
     sort_order: 0,
   };
@@ -50,13 +97,11 @@ function formFromBranch(branch: Branch) {
     phone: branch.phone ?? "",
     whatsapp_number: branch.whatsapp_number ?? "",
     map_url: branch.map_url ?? "",
-    working_hours: branch.working_hours ?? "",
     opening_hours: {
       ...emptyOpeningHours(),
       ...(branch.opening_hours ?? {}),
     },
     timezone: branch.timezone || "Asia/Damascus",
-    ordering_mode: branch.ordering_mode || "auto",
     is_active: branch.is_active,
     sort_order: branch.sort_order,
   };
@@ -91,7 +136,10 @@ export function BranchFormModal({
       {
         ...form,
         slug: form.slug.trim(),
-        map_url: form.map_url || null,
+        map_url: form.map_url ? normalizeGoogleMapsUrl(form.map_url) : null,
+        working_hours: branch?.working_hours ?? null,
+        ordering_mode: "auto",
+        is_active: branch ? form.is_active : true,
         sort_order: Number(form.sort_order) || 0,
       },
       branch?.id
@@ -172,12 +220,55 @@ export function BranchFormModal({
         <p className="text-xs text-stone-500" dir="ltr">
           مثال: 905348271939 (رمز الدولة ثم الرقم بدون + أو 00 أو مسافات)
         </p>
-        <Input
-          label="رابط الخريطة"
-          dir="ltr"
-          value={form.map_url}
-          onChange={(e) => setForm((f) => ({ ...f, map_url: e.target.value }))}
-        />
+
+        <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
+          <p className="text-sm font-medium text-stone-800">موقع الفرع على خرائط Google</p>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={
+                form.address.trim()
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.address.trim())}`
+                  : "https://www.google.com/maps"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-900 px-3 py-2 text-xs font-bold text-brand-500 hover:bg-brand-800"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              فتح خرائط Google لاختيار الموقع
+            </a>
+            {form.map_url && (
+              <a
+                href={normalizeGoogleMapsUrl(form.map_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-medium text-stone-700 hover:bg-stone-100"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                معاينة الرابط
+              </a>
+            )}
+          </div>
+          <Input
+            label="الصق رابط الموقع من Google Maps"
+            dir="ltr"
+            placeholder="https://maps.app.goo.gl/... أو https://www.google.com/maps?q=..."
+            value={form.map_url}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, map_url: e.target.value }))
+            }
+            onBlur={() =>
+              setForm((f) => ({
+                ...f,
+                map_url: normalizeGoogleMapsUrl(f.map_url),
+              }))
+            }
+          />
+          <p className="text-xs text-stone-500">
+            من خرائط Google: اختر المكان ← مشاركة ← نسخ الرابط ← الصقه هنا.
+            يمكنك أيضاً لصق إحداثيات مثل: 33.5138,36.2765
+          </p>
+        </div>
 
         <OpeningHoursEditor
           value={form.opening_hours}
@@ -186,9 +277,8 @@ export function BranchFormModal({
           }
         />
         <p className="rounded-lg bg-stone-50 px-3 py-2 text-xs text-stone-600">
-          <strong>مهم:</strong> «منشور/مخفي» يتحكم بظهور الفرع في الموقع.
-          أما «مفتوح/مغلق الآن» عند الزبون فيتبع جدول الساعات أعلاه (أو وضع التجاوز
-          اليدوي). إن لم تضبط أي يوم، يُعتبر الفرع مفتوحاً للطلبات طالما هو منشور.
+          <strong>مهم:</strong> «منشور/مخفي» يتحكم بظهور الفرع في الموقع. حالة
+          الطلبات (مفتوح/مغلق) تتبع جدول الساعات أعلاه تلقائياً.
         </p>
 
         <Select
@@ -201,31 +291,6 @@ export function BranchFormModal({
           }))}
         />
 
-        <Select
-          label="وضع استقبال الطلبات"
-          value={form.ordering_mode}
-          onChange={(e) =>
-            setForm((f) => ({
-              ...f,
-              ordering_mode: e.target.value as OrderingMode,
-            }))
-          }
-          options={[
-            { value: "auto", label: "تلقائي حسب الجدول" },
-            { value: "force_open", label: "مفتوح الآن (تجاوز يدوي)" },
-            { value: "force_closed", label: "مغلق الآن (تجاوز يدوي)" },
-          ]}
-        />
-
-        <Input
-          label="ساعات العمل (نص حر للعرض — اختياري)"
-          value={form.working_hours}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, working_hours: e.target.value }))
-          }
-          placeholder="يُستخدم فقط إن لم يُضبط الجدول أعلاه"
-        />
-
         <Input
           label="الترتيب"
           type="number"
@@ -234,16 +299,22 @@ export function BranchFormModal({
             setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))
           }
         />
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={form.is_active}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, is_active: e.target.checked }))
-            }
-          />
-          نشط
-        </label>
+        {branch ? (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.is_active}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, is_active: e.target.checked }))
+              }
+            />
+            نشط (منشور)
+          </label>
+        ) : (
+          <p className="text-xs text-stone-500">
+            الفرع سيُنشأ منشوراً تلقائياً. يمكنك إخفاءه لاحقاً من جدول الفروع أو التعديل.
+          </p>
+        )}
       </form>
     </Modal>
   );

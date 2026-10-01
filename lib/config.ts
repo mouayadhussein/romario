@@ -1,8 +1,8 @@
 export const config = {
-  currency: "ILS",
-  currencySymbol: "₪",
-  appName: "قائمة المطعم",
-  appNameEn: "Restaurant Menu",
+  currency: "SYP",
+  currencySymbol: "ليرة",
+  appName: "ديبو",
+  appNameEn: "Debbo",
   defaultLocale: "ar" as const,
   locales: ["ar", "en"] as const,
   rateLimit: {

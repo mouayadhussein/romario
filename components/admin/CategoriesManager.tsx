@@ -43,10 +43,12 @@ function CategoryFormFields({
   form,
   setForm,
   branchId,
+  showActiveToggle,
 }: {
   form: CatForm;
   setForm: React.Dispatch<React.SetStateAction<CatForm>>;
   branchId: string;
+  showActiveToggle: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -69,16 +71,22 @@ function CategoryFormFields({
           setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))
         }
       />
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={form.is_active}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, is_active: e.target.checked }))
-          }
-        />
-        نشط
-      </label>
+      {showActiveToggle ? (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.is_active}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, is_active: e.target.checked }))
+            }
+          />
+          نشط
+        </label>
+      ) : (
+        <p className="text-xs text-stone-500">
+          الصنف سيُنشأ نشطاً تلقائياً. يمكنك تعطيله لاحقاً من القائمة أو التعديل.
+        </p>
+      )}
     </div>
   );
 }
@@ -256,7 +264,7 @@ export function CategoriesManager({
                 branch_id: branch.id,
                 name: form.name,
                 image_url: form.image_url || "",
-                is_active: form.is_active,
+                is_active: editing ? form.is_active : true,
                 sort_order: Number(form.sort_order) || 0,
               },
               editing?.id
@@ -270,7 +278,12 @@ export function CategoriesManager({
             }
           }}
         >
-          <CategoryFormFields form={form} setForm={setForm} branchId={branch.id} />
+          <CategoryFormFields
+            form={form}
+            setForm={setForm}
+            branchId={branch.id}
+            showActiveToggle={!!editing}
+          />
         </form>
       </Modal>
 

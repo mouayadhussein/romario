@@ -45,49 +45,59 @@ export function BranchMenu({
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <h1 className="text-2xl font-bold text-stone-900">{branch.name}</h1>
-        <div className="mt-3">
-          <BranchOpenBadge branch={branch} />
+      <section className="rounded-2xl border border-stone-200 bg-white px-3.5 py-3 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-xl font-bold leading-tight text-stone-900">
+            {branch.name}
+          </h1>
+          <BranchOpenBadge branch={branch} compact />
         </div>
-        <div className="mt-3 space-y-2 text-sm text-stone-600">
-          {branch.address && (
-            <p className="flex gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
-              {branch.address}
-            </p>
-          )}
-          {branch.phone && (
-            <a href={`tel:${branch.phone}`} className="flex gap-2 hover:text-brand-700">
-              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
-              <span dir="ltr">{branch.phone}</span>
-            </a>
-          )}
+
+        {(branch.address || branch.phone) && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
+            {branch.address && (
+              <p className="inline-flex min-w-0 items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+                <span className="truncate">{branch.address}</span>
+              </p>
+            )}
+            {branch.phone && (
+              <a
+                href={`tel:${branch.phone}`}
+                className="inline-flex items-center gap-1.5 hover:text-brand-700"
+              >
+                <Phone className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+                <span dir="ltr">{branch.phone}</span>
+              </a>
+            )}
+          </div>
+        )}
+
+        <div className="mt-2">
+          <BranchWeeklyHours branch={branch} compact />
         </div>
-        <div className="mt-3">
-          <BranchWeeklyHours branch={branch} />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {branch.map_url && (
-            <a
-              href={branch.map_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-200"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t.map}
-            </a>
-          )}
+
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {normalizeWhatsappNumber(branch.whatsapp_number) && (
             <a
               href={`https://wa.me/${normalizeWhatsappNumber(branch.whatsapp_number)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-lg bg-green-100 px-3 py-1.5 text-xs font-medium text-green-800 hover:bg-green-200"
+              className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-800 hover:bg-green-200"
             >
-              <MessageCircle className="h-3.5 w-3.5" />
+              <MessageCircle className="h-3 w-3" />
               {t.whatsapp}
+            </a>
+          )}
+          {branch.map_url && (
+            <a
+              href={branch.map_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-200"
+            >
+              <ExternalLink className="h-3 w-3" />
+              {t.map}
             </a>
           )}
         </div>

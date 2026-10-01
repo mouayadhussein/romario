@@ -140,7 +140,7 @@ export function ItemsManager({
                     }
                   }}
                 >
-                  {item.is_available ? "غير متوفر" : "متوفر"}
+                  {item.is_available ? "تعطيل التوفر" : "تفعيل التوفر"}
                 </Button>
                 <Button
                   size="sm"
@@ -193,7 +193,7 @@ export function ItemsManager({
                 description: form.description || null,
                 price: Number(form.price),
                 image_url: form.image_url || "",
-                is_available: form.is_available,
+                is_available: editing ? form.is_available : true,
                 sort_order: Number(form.sort_order) || 0,
               },
               editing?.id
@@ -244,16 +244,23 @@ export function ItemsManager({
               setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))
             }
           />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_available}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, is_available: e.target.checked }))
-              }
-            />
-            متوفر
-          </label>
+          {editing && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.is_available}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, is_available: e.target.checked }))
+                }
+              />
+              متوفر للطلب
+            </label>
+          )}
+          {!editing && (
+            <p className="text-xs text-stone-500">
+              الوجبة ستُنشأ متوفرة تلقائياً. يمكنك إلغاء التوفر لاحقاً من القائمة أو التعديل.
+            </p>
+          )}
         </form>
       </Modal>
 

@@ -68,7 +68,11 @@ export async function upsertBranch(data: unknown, id?: string): Promise<ActionRe
       return { error: error.message };
     }
   } else {
-    const { error } = await supabase.from("branches").insert(payload);
+    // New branches are always published until an admin deactivates them
+    const { error } = await supabase.from("branches").insert({
+      ...payload,
+      is_active: true,
+    });
     if (error) {
       if (error.code === "23505") return { error: "المعرّف (Slug) مستخدم لفرع آخر" };
       return { error: error.message };
@@ -125,7 +129,11 @@ export async function upsertCategory(data: unknown, id?: string): Promise<Action
     const { error } = await supabase.from("categories").update(payload).eq("id", id);
     if (error) return { error: error.message };
   } else {
-    const { error } = await supabase.from("categories").insert(payload);
+    // New categories are always active until an admin deactivates them
+    const { error } = await supabase.from("categories").insert({
+      ...payload,
+      is_active: true,
+    });
     if (error) return { error: error.message };
   }
 
@@ -158,7 +166,11 @@ export async function upsertItem(data: unknown, id?: string): Promise<ActionResu
     const { error } = await supabase.from("items").update(payload).eq("id", id);
     if (error) return { error: error.message };
   } else {
-    const { error } = await supabase.from("items").insert(payload);
+    // New meals are always available until an admin deactivates them
+    const { error } = await supabase.from("items").insert({
+      ...payload,
+      is_available: true,
+    });
     if (error) return { error: error.message };
   }
 
@@ -191,7 +203,8 @@ export async function updateOrderStatus(orderId: string, status: string): Promis
 
 export async function duplicateCategory(
   categoryId: string,
-  targetBranchId: string
+  targetBranchId: string,
+  itemIds?: string[]
 ): Promise<ActionResult> {
   const supabase = await requireAdmin();
 
@@ -217,10 +230,20 @@ export async function duplicateCategory(
 
   if (insertCatError || !newCat) return { error: insertCatError?.message ?? "فشل النسخ" };
 
-  const { data: items } = await supabase
+  let itemsQuery = supabase
     .from("items")
     .select("*")
     .eq("category_id", categoryId);
+
+  if (itemIds !== undefined) {
+    if (itemIds.length === 0) {
+      revalidatePath(`/admin/branches/${targetBranchId}`);
+      return { success: true };
+    }
+    itemsQuery = itemsQuery.in("id", itemIds);
+  }
+
+  const { data: items } = await itemsQuery;
 
   if (items && items.length > 0) {
     const rows = items.map((item) => ({
@@ -241,9 +264,68 @@ export async function duplicateCategory(
   return { success: true };
 }
 
+export type BranchCategoryWithItems = {
+  id: string;
+  name: string;
+  items: { id: string; name: string; price: number }[];
+};
+
+export async function listBranchCategories(
+  branchId: string
+): Promise<{
+  error?: string;
+  categories?: BranchCategoryWithItems[];
+}> {
+  const supabase = await requireAdmin();
+
+  const { data: categories, error } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("branch_id", branchId)
+    .order("sort_order", { ascending: true });
+
+  if (error) return { error: error.message };
+  if (!categories || categories.length === 0) {
+    return { categories: [] };
+  }
+
+  const ids = categories.map((c) => c.id);
+  const { data: items } = await supabase
+    .from("items")
+    .select("id, name, price, category_id")
+    .in("category_id", ids)
+    .order("sort_order", { ascending: true });
+
+  const byCategory = new Map<string, { id: string; name: string; price: number }[]>();
+  for (const row of items ?? []) {
+    const key = row.category_id as string;
+    const list = byCategory.get(key) ?? [];
+    list.push({
+      id: row.id as string,
+      name: row.name as string,
+      price: Number(row.price),
+    });
+    byCategory.set(key, list);
+  }
+
+  return {
+    categories: categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      items: byCategory.get(c.id) ?? [],
+    })),
+  };
+}
+
+export type DuplicateMenuSelection = {
+  categoryId: string;
+  itemIds: string[];
+};
+
 export async function duplicateMenu(
   sourceBranchId: string,
-  targetBranchId: string
+  targetBranchId: string,
+  selections?: DuplicateMenuSelection[]
 ): Promise<ActionResult> {
   const supabase = await requireAdmin();
 
@@ -251,18 +333,39 @@ export async function duplicateMenu(
     return { error: "اختر فرعين مختلفين" };
   }
 
-  const { data: categories } = await supabase
-    .from("categories")
-    .select("id")
-    .eq("branch_id", sourceBranchId);
+  let toCopy = selections;
 
-  if (!categories || categories.length === 0) {
-    return { error: "لا توجد أصناف في الفرع المصدر" };
+  if (toCopy === undefined) {
+    const listed = await listBranchCategories(sourceBranchId);
+    if (listed.error) return { error: listed.error };
+    toCopy = (listed.categories ?? []).map((c) => ({
+      categoryId: c.id,
+      itemIds: c.items.map((i) => i.id),
+    }));
   }
 
-  for (const cat of categories) {
-    const result = await duplicateCategory(cat.id, targetBranchId);
-    if ("error" in result) return result;
+  const filtered = toCopy.filter((s) => s.itemIds.length > 0);
+  if (filtered.length === 0) {
+    return { error: "اختر وجبة واحدةً على الأقل للنسخ" };
+  }
+
+  const categoryIds = filtered.map((s) => s.categoryId);
+  const { data: owned } = await supabase
+    .from("categories")
+    .select("id")
+    .eq("branch_id", sourceBranchId)
+    .in("id", categoryIds);
+
+  const ownedIds = new Set((owned ?? []).map((c) => c.id));
+
+  for (const selection of filtered) {
+    if (!ownedIds.has(selection.categoryId)) continue;
+    const result = await duplicateCategory(
+      selection.categoryId,
+      targetBranchId,
+      selection.itemIds
+    );
+    if (result.error) return result;
   }
 
   revalidatePath(`/admin/branches/${targetBranchId}`);

@@ -9,9 +9,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
 import { BranchFormModal } from "./BranchFormModal";
-import { deleteBranch, duplicateMenu, upsertBranch } from "@/lib/admin-actions";
+import { DuplicateMenuModal } from "./DuplicateMenuModal";
+import { deleteBranch, upsertBranch } from "@/lib/admin-actions";
 import { getBranchStatus } from "@/lib/opening-hours";
 import type { Branch } from "@/types/database";
 
@@ -31,9 +31,6 @@ export function BranchesManager({
   const [deleting, setDeleting] = useState(false);
   const [qrBranch, setQrBranch] = useState<Branch | null>(null);
   const [dupOpen, setDupOpen] = useState(false);
-  const [dupSource, setDupSource] = useState(branches[0]?.id ?? "");
-  const [dupTarget, setDupTarget] = useState(branches[1]?.id ?? branches[0]?.id ?? "");
-  const [dupLoading, setDupLoading] = useState(false);
 
   const siteUrl =
     typeof window !== "undefined"
@@ -284,49 +281,12 @@ export function BranchesManager({
         )}
       </Modal>
 
-      <Modal
+      <DuplicateMenuModal
         open={dupOpen}
         onClose={() => setDupOpen(false)}
-        title="نسخ قائمة بين الفروع"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDupOpen(false)}>
-              إلغاء
-            </Button>
-            <Button
-              loading={dupLoading}
-              onClick={async () => {
-                setDupLoading(true);
-                const result = await duplicateMenu(dupSource, dupTarget);
-                setDupLoading(false);
-                if (result.error) toast.error(result.error);
-                else {
-                  toast.success("تم نسخ القائمة");
-                  setDupOpen(false);
-                  router.refresh();
-                }
-              }}
-            >
-              نسخ
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Select
-            label="من فرع"
-            value={dupSource}
-            onChange={(e) => setDupSource(e.target.value)}
-            options={branches.map((b) => ({ value: b.id, label: b.name }))}
-          />
-          <Select
-            label="إلى فرع"
-            value={dupTarget}
-            onChange={(e) => setDupTarget(e.target.value)}
-            options={branches.map((b) => ({ value: b.id, label: b.name }))}
-          />
-        </div>
-      </Modal>
+        branches={branches}
+        onDone={() => router.refresh()}
+      />
     </div>
   );
 }
