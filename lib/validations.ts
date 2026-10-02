@@ -149,12 +149,18 @@ export const createOrderSchema = z
   })
   .strict()
   .superRefine((data, ctx) => {
-    if (data.orderType === "delivery" && !data.customerAddress?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "عنوان التوصيل مطلوب",
-        path: ["customerAddress"],
-      });
+    if (data.orderType === "delivery") {
+      const hasAddress = Boolean(data.customerAddress?.trim());
+      const hasLocation =
+        data.customerLat != null && data.customerLng != null;
+      if (!hasAddress && !hasLocation) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "لا يمكنك إرسال الطلب إلا بعد كتابة عنوان التوصيل أو تحديد الموقع على الخريطة",
+          path: ["customerAddress"],
+        });
+      }
     }
     if (data.orderType === "dine_in" && !data.tableNumber?.trim()) {
       ctx.addIssue({

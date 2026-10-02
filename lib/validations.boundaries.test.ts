@@ -60,6 +60,17 @@ describe("validation boundaries vs DB CHECKs (007)", () => {
         }).success
       ).toBe(true);
 
+      // Delivery with map location only (no text address)
+      expect(
+        createOrderSchema.safeParse({
+          ...baseOrder,
+          orderType: "delivery",
+          customerAddress: null,
+          customerLat: 33.5138,
+          customerLng: 36.2765,
+        }).success
+      ).toBe(true);
+
       expect(
         createOrderSchema.safeParse({
           ...baseOrder,
@@ -96,6 +107,16 @@ describe("validation boundaries vs DB CHECKs (007)", () => {
           ...baseOrder,
           orderType: "delivery",
           customerAddress: repeat("ع", 301),
+        }).success
+      ).toBe(false);
+
+      expect(
+        createOrderSchema.safeParse({
+          ...baseOrder,
+          orderType: "delivery",
+          customerAddress: null,
+          customerLat: null,
+          customerLng: null,
         }).success
       ).toBe(false);
 

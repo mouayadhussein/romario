@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAllowedOrigins, getEnv, getSupabaseHostname } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 const MAX_BODY_BYTES = 32 * 1024; // 32 KiB
 
@@ -13,61 +14,119 @@ export function getClientIp(request: Request): string {
   return request.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
+function requestHost(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+  return request.headers.get("host")?.trim() || null;
+}
+
 /**
- * Reject cross-origin POSTs in production when an Origin header is present.
- * Same-origin browser requests send Origin; some non-browser clients may omit it.
+ * CSRF-ish check: allow same-host Origin (page and API on the same deployment),
+ * plus configured SITE_URL / localhost. Reject only true cross-site requests.
  */
-export function assertAllowedOrigin(request: Request): { ok: true } | { ok: false; status: number; error: string } {
+export function assertAllowedOrigin(
+  request: Request
+): { ok: true } | { ok: false; status: number; error: string } {
   const origin = request.headers.get("origin");
+  const host = requestHost(request);
+
+  // Browser same-origin fetch usually sends Origin. Missing Origin is OK for
+  // non-browser clients; Host is still validated lightly in production.
   if (!origin) {
-    // Allow missing Origin for same-site navigations / non-browser; Host still checked lightly.
-    const host = request.headers.get("host");
-    const site = getEnv().NEXT_PUBLIC_SITE_URL;
-    if (site && host && getEnv().NODE_ENV === "production") {
-      try {
-        const siteHost = new URL(site).host;
-        if (host !== siteHost && !host.endsWith(".vercel.app")) {
-          return { ok: false, status: 403, error: "طلب غير مسموح" };
+    if (getEnv().NODE_ENV === "production" && host) {
+      const site = getEnv().NEXT_PUBLIC_SITE_URL;
+      if (site) {
+        try {
+          const siteHost = new URL(site).host;
+          const ok =
+            host === siteHost ||
+            host.endsWith(".vercel.app") ||
+            host === "localhost:3000" ||
+            host === "127.0.0.1:3000";
+          if (!ok) {
+            logger.warn("orders.origin_host_mismatch", { reason: "no_origin" });
+            return {
+              ok: false,
+              status: 403,
+              error:
+                "لا يمكن إرسال الطلب من هذا العنوان. افتح الموقع من الرابط الرسمي ثم أعد المحاولة.",
+            };
+          }
+        } catch {
+          /* ignore bad SITE_URL */
         }
-      } catch {
-        /* ignore */
       }
     }
+    return { ok: true };
+  }
+
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return {
+      ok: false,
+      status: 403,
+      error: "طلب غير صالح من مصدر غير معروف. حدّث الصفحة ثم أعد المحاولة.",
+    };
+  }
+
+  // Primary: Origin matches this deployment's Host (works for custom domain + vercel.app)
+  if (host && originHost === host) {
     return { ok: true };
   }
 
   const allowed = getAllowedOrigins();
-  if (allowed.length === 0) {
-    // SITE_URL not set — allow in non-production; in production require SITE_URL
-    if (getEnv().NODE_ENV === "production") {
-      return { ok: false, status: 403, error: "طلب غير مسموح" };
-    }
+  if (allowed.includes(origin)) {
     return { ok: true };
   }
 
-  if (!allowed.includes(origin)) {
-    // Also allow *.vercel.app preview hosts matching the deployment host
+  // Preview / alternate vercel host matching the request Host was already covered.
+  // Allow configured SITE_URL host even if scheme/port string differs slightly.
+  const site = getEnv().NEXT_PUBLIC_SITE_URL;
+  if (site) {
     try {
-      const o = new URL(origin);
-      const host = request.headers.get("host");
-      if (host && o.host === host && o.host.endsWith(".vercel.app")) {
+      if (originHost === new URL(site).host) {
         return { ok: true };
       }
     } catch {
-      /* fall through */
+      /* ignore */
     }
-    return { ok: false, status: 403, error: "طلب غير مسموح" };
   }
 
-  return { ok: true };
+  if (getEnv().NODE_ENV !== "production") {
+    if (
+      originHost === "localhost:3000" ||
+      originHost === "127.0.0.1:3000" ||
+      originHost.startsWith("localhost:") ||
+      originHost.startsWith("127.0.0.1:")
+    ) {
+      return { ok: true };
+    }
+  }
+
+  logger.warn("orders.origin_rejected", { reason: "cross_origin" });
+  return {
+    ok: false,
+    status: 403,
+    error:
+      "لا يمكن إرسال الطلب من موقع آخر. افتح المتجر من الرابط الرسمي ثم أكّد الطلب من جديد.",
+  };
 }
 
-export function assertBodySize(request: Request): { ok: true } | { ok: false; status: number; error: string } {
+export function assertBodySize(
+  request: Request
+): { ok: true } | { ok: false; status: number; error: string } {
   const raw = request.headers.get("content-length");
   if (raw) {
     const len = Number(raw);
     if (Number.isFinite(len) && len > MAX_BODY_BYTES) {
-      return { ok: false, status: 413, error: "حجم الطلب كبير جداً" };
+      return {
+        ok: false,
+        status: 413,
+        error:
+          "حجم بيانات الطلب كبير جداً. قلّل الملاحظات أو عدد الأصناف ثم أعد المحاولة.",
+      };
     }
   }
   return { ok: true };

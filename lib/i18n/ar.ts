@@ -47,6 +47,10 @@ export const ar = {
     customerName: "الاسم",
     customerPhone: "رقم الهاتف",
     customerAddress: "عنوان التوصيل",
+    deliveryLocationHint:
+      "أدخل عنواناً نصياً أو حدّد موقعك على الخريطة (واحد منهما يكفي)",
+    deliveryLocationRequired:
+      "لا يمكنك إرسال الطلب إلا بعد كتابة عنوان التوصيل أو تحديد الموقع على الخريطة",
     orderType: "نوع الطلب",
     delivery: "توصيل",
     pickup: "استلام",

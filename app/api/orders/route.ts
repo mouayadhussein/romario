@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     const ipLimit = await checkOrderIpRateLimit(ip);
     if (!ipLimit.allowed) {
       return NextResponse.json(
-        { error: "عدد الطلبات كبير جداً، حاول لاحقاً" },
+        { error: "أرسلت طلبات كثيرة جداً خلال دقيقة. انتظر قليلاً ثم أعد المحاولة." },
         { status: 429 }
       );
     }
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     if (idempotencyKey) {
       if (idempotencyKey.length > 128 || !/^[\w\-.:]+$/.test(idempotencyKey)) {
         return NextResponse.json(
-          { error: "مفتاح التكرار غير صالح" },
+          { error: "انتهت صلاحية جلسة الإرسال. حدّث الصفحة ثم أكّد الطلب من جديد." },
           { status: 400 }
         );
       }
@@ -85,7 +85,13 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "تعذّر قراءة بيانات الطلب. حدّث الصفحة وتأكد من الاتصال ثم أعد المحاولة.",
+        },
+        { status: 400 }
+      );
     }
 
     const parsed = createOrderSchema.safeParse(body);
@@ -96,8 +102,13 @@ export async function POST(request: NextRequest) {
         const key = String(issue.path[0] ?? "form");
         if (!fieldErrors[key]) fieldErrors[key] = issue.message;
       }
+      const firstMessage =
+        Object.values(fieldErrors)[0] ?? "بيانات الطلب غير مكتملة أو غير صالحة";
       return NextResponse.json(
-        { error: "بيانات غير صالحة", fieldErrors },
+        {
+          error: firstMessage,
+          fieldErrors,
+        },
         { status: 400 }
       );
     }
@@ -107,7 +118,7 @@ export async function POST(request: NextRequest) {
     const phoneLimit = await checkOrderPhoneRateLimit(data.customerPhone);
     if (!phoneLimit.allowed) {
       return NextResponse.json(
-        { error: "تم تجاوز حد الطلبات لهذا الرقم، حاول لاحقاً" },
+        { error: "تم تجاوز حد الطلبات لهذا الرقم خلال الساعة. حاول لاحقاً أو استخدم رقماً آخر." },
         { status: 429 }
       );
     }
@@ -123,7 +134,13 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (branchError || !branch || !branch.is_active) {
-      return NextResponse.json({ error: "الفرع غير متاح" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error:
+            "هذا الفرع غير متاح حالياً لاستقبال الطلبات. اختر فرعاً آخر أو حاول لاحقاً.",
+        },
+        { status: 400 }
+      );
     }
 
     const status = getBranchStatus({
@@ -155,7 +172,10 @@ export async function POST(request: NextRequest) {
         code: itemsError?.code ?? "unknown",
       });
       return NextResponse.json(
-        { error: "فشل التحقق من الأصناف" },
+        {
+          error:
+            "تعذّر التحقق من أصناف السلة. حدّث الصفحة وأعد إضافة الوجبات ثم حاول من جديد.",
+        },
         { status: 500 }
       );
     }
@@ -187,13 +207,18 @@ export async function POST(request: NextRequest) {
       const dbItem = itemsMap.get(line.itemId);
       if (!dbItem) {
         return NextResponse.json(
-          { error: "أحد الأصناف غير موجود" },
+          {
+            error:
+              "أحد الأصناف في السلة لم يعد موجوداً. احذف الأصناف وأعد إضافتها من القائمة.",
+          },
           { status: 400 }
         );
       }
       if (!dbItem.is_available) {
         return NextResponse.json(
-          { error: `الصنف "${dbItem.name}" غير متاح حالياً` },
+          {
+            error: `الوجبة «${dbItem.name}» غير متوفرة حالياً. احذفها من السلة أو اختر بديلاً.`,
+          },
           { status: 400 }
         );
       }
@@ -202,7 +227,9 @@ export async function POST(request: NextRequest) {
         !dbItem.categories.is_active
       ) {
         return NextResponse.json(
-          { error: `الصنف "${dbItem.name}" لا ينتمي لهذا الفرع` },
+          {
+            error: `الوجبة «${dbItem.name}» لا تنتمي لهذا الفرع. أعد الطلب من قائمة الفرع الصحيح.`,
+          },
           { status: 400 }
         );
       }
@@ -226,7 +253,10 @@ export async function POST(request: NextRequest) {
     if (numError || !orderNumber) {
       logger.error("orders.number_failed", { code: numError?.code ?? "unknown" });
       return NextResponse.json(
-        { error: "فشل إنشاء رقم الطلب" },
+        {
+          error:
+            "تعذّر إنشاء رقم الطلب الآن. انتظر لحظات ثم أعد المحاولة.",
+        },
         { status: 500 }
       );
     }
@@ -263,7 +293,13 @@ export async function POST(request: NextRequest) {
 
     if (orderError || !order) {
       logger.error("orders.insert_failed", { code: orderError?.code ?? "unknown" });
-      return NextResponse.json({ error: "فشل حفظ الطلب" }, { status: 500 });
+      return NextResponse.json(
+        {
+          error:
+            "تعذّر حفظ الطلب في النظام. تحقق من البيانات ثم أعد المحاولة.",
+        },
+        { status: 500 }
+      );
     }
 
     const { error: linesError } = await supabase.from("order_items").insert(
@@ -279,7 +315,10 @@ export async function POST(request: NextRequest) {
       });
       await supabase.from("orders").delete().eq("id", order.id);
       return NextResponse.json(
-        { error: "فشل حفظ أصناف الطلب" },
+        {
+          error:
+            "تم حفظ الطلب جزئياً ثم فشل حفظ الأصناف. أعد إرسال الطلب أو تواصل مع المطعم.",
+        },
         { status: 500 }
       );
     }
@@ -306,7 +345,10 @@ export async function POST(request: NextRequest) {
       name: err instanceof Error ? err.name : "unknown",
     });
     return NextResponse.json(
-      { error: "خطأ داخلي في الخادم" },
+      {
+        error:
+          "حدث خطأ غير متوقع أثناء إرسال الطلب. حدّث الصفحة ثم أعد المحاولة.",
+      },
       { status: 500 }
     );
   }

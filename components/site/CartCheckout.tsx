@@ -107,6 +107,18 @@ export function CartCheckout({ branch }: { branch: Branch }) {
       return;
     }
     setErrors({});
+
+    if (orderType === "delivery") {
+      const hasAddress = Boolean(form.customerAddress.trim());
+      const hasLocation = location != null;
+      if (!hasAddress && !hasLocation) {
+        const msg = t.deliveryLocationRequired;
+        setErrors({ customerAddress: msg });
+        toast.error(msg);
+        return;
+      }
+    }
+
     setLoading(true);
 
     const deliveryLocation =
@@ -158,7 +170,10 @@ export function CartCheckout({ branch }: { branch: Branch }) {
 
       if (!res.ok) {
         if (data.fieldErrors) setErrors(data.fieldErrors);
-        toast.error(data.error || "فشل إنشاء الطلب");
+        const fieldMsg = data.fieldErrors
+          ? Object.values(data.fieldErrors)[0]
+          : undefined;
+        toast.error(data.error || fieldMsg || "فشل إنشاء الطلب");
         return;
       }
 
@@ -198,7 +213,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         `/${branch.slug}/confirmation?order=${encodeURIComponent(orderNumber)}`
       );
     } catch {
-      toast.error("حدث خطأ في الاتصال");
+      toast.error(
+        "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."
+      );
     } finally {
       setLoading(false);
     }
@@ -337,7 +354,6 @@ export function CartCheckout({ branch }: { branch: Branch }) {
             <Textarea
               label={t.customerAddress}
               name="customerAddress"
-              required
               value={form.customerAddress}
               error={errors.customerAddress}
               onChange={(e) =>
@@ -345,12 +361,19 @@ export function CartCheckout({ branch }: { branch: Branch }) {
               }
               disabled={orderingDisabled}
             />
+            <p className="-mt-2 text-xs text-stone-500">
+              {t.deliveryLocationHint}
+            </p>
 
             <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
               <p className="text-sm font-medium text-stone-800">
                 الموقع على الخريطة
               </p>
-              <p className="text-xs text-stone-500">تحديد الموقع اختياري</p>
+              <p className="text-xs text-stone-500">
+                {location
+                  ? "تم تحديد الموقع — يمكنك المتابعة بدون كتابة عنوان"
+                  : "بديل عن العنوان النصي، أو معه للتوضيح"}
+              </p>
 
               {!location ? (
                 mapsEnabled ? (
