@@ -242,6 +242,22 @@ export const branchSchema = z.object({
     .number({ error: "الترتيب غير صالح" })
     .int("الترتيب يجب أن يكون عدداً صحيحاً")
     .min(0, "الترتيب لا يمكن أن يكون سالباً"),
+  delivery_fee: z
+    .number({ error: "رسوم التوصيل غير صالحة" })
+    .min(0, "رسوم التوصيل لا يمكن أن تكون سالبة")
+    .max(99999, "رسوم التوصيل كبيرة جداً")
+    .default(0),
+  min_order_amount: z
+    .number({ error: "الحد الأدنى غير صالح" })
+    .min(0, "الحد الأدنى لا يمكن أن يكون سالباً")
+    .max(99999, "الحد الأدنى كبير جداً")
+    .default(0),
+  free_delivery_threshold: z
+    .number({ error: "حد التوصيل المجاني غير صالح" })
+    .min(0, "حد التوصيل المجاني لا يمكن أن يكون سالباً")
+    .max(99999, "حد التوصيل المجاني كبير جداً")
+    .optional()
+    .nullable(),
 }).superRefine((data, ctx) => {
   const hasLat = data.latitude != null;
   const hasLng = data.longitude != null;
@@ -288,6 +304,89 @@ export const itemSchema = z.object({
 export type ItemInput = z.infer<typeof itemSchema>;
 
 export const orderStatusSchema = z.enum(
-  ["new", "preparing", "delivered", "cancelled"],
+  ["new", "preparing", "ready", "on_the_way", "delivered", "cancelled"],
   { error: "حالة غير صالحة" }
 );
+
+export const cancelOrderSchema = z
+  .object({
+    orderId: z.string().uuid({ error: "معرّف الطلب غير صالح" }),
+    reasonCode: z.enum(
+      [
+        "customer_cancelled",
+        "no_answer",
+        "wrong_address",
+        "item_unavailable",
+        "fake_order",
+        "other",
+      ],
+      { error: "سبب الإلغاء غير صالح" }
+    ),
+    reasonText: z
+      .string()
+      .trim()
+      .max(200, "سبب الإلغاء طويل جداً")
+      .optional()
+      .nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.reasonCode === "other" && !data.reasonText?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "اكتب سبب الإلغاء",
+        path: ["reasonText"],
+      });
+    }
+  });
+
+export const staffUpsertSchema = z.object({
+  full_name: nameField("اسم الموظف"),
+  email: z
+    .string({ error: "البريد مطلوب" })
+    .trim()
+    .email("بريد إلكتروني غير صالح")
+    .max(200, "البريد طويل جداً"),
+  phone: z
+    .string()
+    .trim()
+    .max(20, "رقم الهاتف طويل جداً")
+    .optional()
+    .nullable(),
+  branch_ids: z
+    .array(z.string().uuid())
+    .min(1, "اختر فرعاً واحداً على الأقل")
+    .max(50, "عدد الفروع كبير جداً"),
+  is_active: z.boolean().optional(),
+});
+
+export const cashSettlementSchema = z.object({
+  staffId: z.string().uuid({ error: "الموظف غير صالح" }),
+  amount: z
+    .number({ error: "المبلغ غير صالح" })
+    .positive("المبلغ يجب أن يكون أكبر من صفر")
+    .max(999999, "المبلغ كبير جداً"),
+  note: plainText(300, "الملاحظة طويلة جداً").optional().nullable(),
+});
+
+export const deliverOrderSchema = z
+  .object({
+    orderId: z.string().uuid(),
+    collectedAmount: z
+      .number({ error: "المبلغ غير صالح" })
+      .min(0, "المبلغ لا يمكن أن يكون سالباً")
+      .max(999999, "المبلغ كبير جداً"),
+    note: plainText(200, "الملاحظة طويلة جداً").optional().nullable(),
+    expectedTotal: z.number().min(0).max(999999),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      Math.abs(data.collectedAmount - data.expectedTotal) > 0.009 &&
+      !data.note?.trim()
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "أضف ملاحظة عند اختلاف المبلغ عن إجمالي الطلب",
+        path: ["note"],
+      });
+    }
+  });

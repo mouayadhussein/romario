@@ -19,7 +19,10 @@ interface WhatsAppOrderPayload {
   tableNumber?: string | null;
   generalNote?: string | null;
   items: WhatsAppOrderItem[];
+  subtotal?: number;
+  deliveryFee?: number;
   total: number;
+  trackingUrl?: string | null;
   branchName: string;
 }
 
@@ -96,11 +99,24 @@ export function buildWhatsAppMessage(payload: WhatsAppOrderPayload): string {
     );
   }
 
+  if (
+    payload.subtotal != null &&
+    payload.deliveryFee != null &&
+    (payload.deliveryFee > 0 || payload.subtotal !== payload.total)
+  ) {
+    lines.push(``, `المجموع الفرعي: ${formatPrice(payload.subtotal)}`);
+    lines.push(`رسوم التوصيل: ${formatPrice(payload.deliveryFee)}`);
+  }
+
   lines.push(
     ``,
     `المجموع: ${formatPrice(payload.total)}`,
     `الدفع: نقداً عند الاستلام`
   );
+
+  if (payload.trackingUrl) {
+    lines.push(``, `تتبع الطلب: ${payload.trackingUrl}`);
+  }
 
   // Build full message first; encodeURIComponent is applied once in buildWhatsAppUrl
   return lines.join("\n");

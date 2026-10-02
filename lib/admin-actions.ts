@@ -8,11 +8,10 @@ import {
   branchSchema,
   categorySchema,
   itemSchema,
-  orderStatusSchema,
 } from "@/lib/validations";
 import { checkLoginRateLimit } from "@/lib/rate-limit";
 import { isAllowedImageUrl, isAllowedMapUrl } from "@/lib/security";
-import { logger } from "@/lib/logger";
+import { requireAdmin as requireAdminAuth } from "@/lib/auth-guards";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -21,18 +20,7 @@ type ActionResult = { error?: string; success?: boolean; needsMfa?: boolean };
 type AppSupabase = SupabaseClient<Database>;
 
 async function requireAdmin(): Promise<AppSupabase> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("غير مصرح");
-
-  const { data: isAdmin, error } = await supabase.rpc("is_admin");
-  if (error || !isAdmin) {
-    logger.warn("admin.authz_denied", { userIdPrefix: user.id.slice(0, 8) });
-    throw new Error("غير مصرح");
-  }
-
+  const { supabase } = await requireAdminAuth();
   return supabase;
 }
 
@@ -240,6 +228,9 @@ export async function upsertBranch(
     opening_hours: parsed.data.opening_hours,
     timezone: parsed.data.timezone,
     ordering_mode: parsed.data.ordering_mode,
+    delivery_fee: parsed.data.delivery_fee ?? 0,
+    min_order_amount: parsed.data.min_order_amount ?? 0,
+    free_delivery_threshold: parsed.data.free_delivery_threshold ?? null,
   };
 
   if (id) {
@@ -388,18 +379,8 @@ export async function updateOrderStatus(
   orderId: string,
   status: string
 ): Promise<ActionResult> {
-  const supabase = await requireAdmin();
-  const parsed = orderStatusSchema.safeParse(status);
-  if (!parsed.success) return { error: "حالة غير صالحة" };
-
-  const { error } = await supabase
-    .from("orders")
-    .update({ status: parsed.data })
-    .eq("id", orderId);
-
-  if (error) return { error: "فشل تحديث الحالة" };
-  revalidatePath("/admin");
-  return { success: true };
+  const { updateOrderStatus: run } = await import("@/lib/order-actions");
+  return run(orderId, status);
 }
 
 export async function duplicateCategory(

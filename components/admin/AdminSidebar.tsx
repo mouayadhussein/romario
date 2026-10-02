@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, LogOut, Shield } from "lucide-react";
+import {
+  LayoutDashboard,
+  Store,
+  LogOut,
+  Shield,
+  Users,
+  Wallet,
+  Trash2,
+} from "lucide-react";
 import { logoutAction } from "@/lib/admin-actions";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -10,6 +18,9 @@ import { useRouter } from "next/navigation";
 const links = [
   { href: "/admin", label: "الطلبات", icon: LayoutDashboard },
   { href: "/admin/branches", label: "الفروع والأصناف", icon: Store },
+  { href: "/admin/staff", label: "الموظفون", icon: Users },
+  { href: "/admin/cash", label: "تسوية النقد", icon: Wallet },
+  { href: "/admin/trash", label: "المحذوفات", icon: Trash2 },
   { href: "/admin/mfa/setup", label: "الأمان (MFA)", icon: Shield },
 ];
 

@@ -5,7 +5,7 @@ import {
   checkOrderIpRateLimit,
   checkOrderPhoneRateLimit,
 } from "@/lib/rate-limit";
-import { sanitizeNote } from "@/lib/utils";
+import { sanitizeNote, formatPrice } from "@/lib/utils";
 import { getBranchStatus } from "@/lib/opening-hours";
 import { logger } from "@/lib/logger";
 import {
@@ -13,6 +13,7 @@ import {
   assertBodySize,
   getClientIp,
 } from "@/lib/security";
+import { calculateOrderFees } from "@/lib/order-fees";
 
 /** Short-lived idempotency cache (per instance; Upstash optional later). */
 const idempotencyCache = new Map<
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
     const { data: branch, error: branchError } = await supabase
       .from("branches")
       .select(
-        "id, name, is_active, whatsapp_number, opening_hours, timezone, ordering_mode, working_hours"
+        "id, name, is_active, whatsapp_number, opening_hours, timezone, ordering_mode, working_hours, delivery_fee, min_order_amount, free_delivery_threshold"
       )
       .eq("id", data.branchId)
       .single();
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
       note: string | null;
     }[] = [];
 
-    let total = 0;
+    let subtotal = 0;
 
     for (const line of data.items) {
       const dbItem = itemsMap.get(line.itemId);
@@ -235,7 +236,7 @@ export async function POST(request: NextRequest) {
       }
 
       const price = Number(dbItem.price);
-      total += price * line.quantity;
+      subtotal += price * line.quantity;
       orderLines.push({
         item_id: dbItem.id,
         name_snapshot: dbItem.name,
@@ -243,6 +244,26 @@ export async function POST(request: NextRequest) {
         quantity: line.quantity,
         note: sanitizeNote(line.note),
       });
+    }
+
+    const fees = calculateOrderFees({
+      orderType: data.orderType,
+      subtotal,
+      deliveryFee: Number(branch.delivery_fee ?? 0),
+      minOrderAmount: Number(branch.min_order_amount ?? 0),
+      freeDeliveryThreshold:
+        branch.free_delivery_threshold == null
+          ? null
+          : Number(branch.free_delivery_threshold),
+    });
+
+    if (!fees.minOrderOk) {
+      return NextResponse.json(
+        {
+          error: `الحد الأدنى للطلب ${formatPrice(Number(branch.min_order_amount ?? 0))}. ينقصك ${formatPrice(fees.minOrderShortfall)}.`,
+        },
+        { status: 400 }
+      );
     }
 
     const { data: orderNumber, error: numError } = await supabase.rpc(
@@ -285,10 +306,12 @@ export async function POST(request: NextRequest) {
         order_type: data.orderType,
         table_number: sanitizeNote(data.tableNumber, 20),
         general_note: sanitizeNote(data.generalNote, 500),
-        total,
+        subtotal: fees.subtotal,
+        delivery_fee: fees.deliveryFee,
+        total: fees.total,
         status: "new",
       })
-      .select("id, order_number, total")
+      .select("id, order_number, total, subtotal, delivery_fee, tracking_token")
       .single();
 
     if (orderError || !order) {
@@ -326,6 +349,9 @@ export async function POST(request: NextRequest) {
     const responseBody = {
       orderId: order.id,
       orderNumber: order.order_number,
+      trackingToken: order.tracking_token,
+      subtotal: Number(order.subtotal ?? fees.subtotal),
+      deliveryFee: Number(order.delivery_fee ?? fees.deliveryFee),
       total: Number(order.total),
       orderItems: orderLines.map((l) => ({
         name: l.name_snapshot,

@@ -102,6 +102,33 @@ async function main() {
     return { error: res.error, data: res.data };
   });
 
+  await expectDeny("select staff", async () => {
+    const res = await supabase.from("staff").select("user_id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select staff_branches", async () => {
+    const res = await supabase.from("staff_branches").select("staff_id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select cash_settlements", async () => {
+    const res = await supabase.from("cash_settlements").select("id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select order_events", async () => {
+    const res = await supabase.from("order_events").select("id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("rpc claim_order", async () => {
+    const res = await supabase.rpc("claim_order", {
+      p_order_id: "00000000-0000-0000-0000-000000000000",
+    });
+    return { error: res.error, data: res.data };
+  });
+
   await expectDeny("select branch_counters", async () => {
     const res = await supabase.from("branch_counters").select("branch_id").limit(5);
     return { error: res.error, data: res.data };

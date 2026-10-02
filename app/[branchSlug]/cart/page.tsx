@@ -22,14 +22,22 @@ export default async function CartPage({
   const { data: branch } = await supabase
     .from("branches")
     .select(
-      "id, name, slug, address, phone, whatsapp_number, map_url, latitude, longitude, working_hours, opening_hours, timezone, ordering_mode, is_active, sort_order"
+      "id, name, slug, address, phone, whatsapp_number, map_url, latitude, longitude, working_hours, opening_hours, timezone, ordering_mode, is_active, sort_order, delivery_fee, min_order_amount, free_delivery_threshold"
     )
     .eq("slug", branchSlug)
     .eq("is_active", true)
     .single();
 
   if (!branch) notFound();
-  const typedBranch = branch as Branch;
+  const typedBranch = {
+    ...branch,
+    delivery_fee: Number(branch.delivery_fee ?? 0),
+    min_order_amount: Number(branch.min_order_amount ?? 0),
+    free_delivery_threshold:
+      branch.free_delivery_threshold == null
+        ? null
+        : Number(branch.free_delivery_threshold),
+  } as Branch;
 
   return (
     <CartProvider branchSlug={branchSlug}>

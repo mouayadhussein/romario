@@ -7,9 +7,13 @@ export async function updateSession(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  const pathname = request.nextUrl.pathname;
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isStaffRoute = pathname.startsWith("/staff");
+
   if (!url || !anonKey) {
-    // Fail closed for admin routes when misconfigured
-    if (request.nextUrl.pathname.startsWith("/admin")) {
+    // Fail closed for protected routes when misconfigured
+    if (isAdminRoute || isStaffRoute) {
       return new NextResponse("Service unavailable", { status: 503 });
     }
     return supabaseResponse;
@@ -36,25 +40,86 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isLoginPage = pathname === "/admin/login";
+  const isAdminLogin = pathname === "/admin/login";
+  const isStaffLogin = pathname === "/staff/login";
   const isMfaVerify = pathname === "/admin/mfa/verify";
   const isMfaSetup = pathname === "/admin/mfa/setup";
 
-  if (isAdminRoute && !isLoginPage && !user) {
+  function redirectTo(path: string) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/admin/login";
+    redirectUrl.pathname = path;
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && isAdminRoute && !isLoginPage) {
+  // ---------- Staff routes ----------
+  if (isStaffRoute) {
+    if (!isStaffLogin && !user) {
+      return redirectTo("/staff/login");
+    }
+
+    if (user && isStaffLogin) {
+      const { data: isAdmin } = await supabase.rpc("is_admin");
+      if (isAdmin) return redirectTo("/admin");
+
+      const { data: isStaff } = await supabase.rpc("is_staff");
+      if (isStaff) {
+        const { data: row } = await supabase
+          .from("staff")
+          .select("is_active")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (row?.is_active) return redirectTo("/staff");
+      }
+      await supabase.auth.signOut();
+    }
+
+    if (user && !isStaffLogin) {
+      const { data: isAdmin } = await supabase.rpc("is_admin");
+      if (isAdmin) {
+        // Admins use /admin; keep them out of staff app unless also staff
+        const { data: isStaff } = await supabase.rpc("is_staff");
+        if (!isStaff) return redirectTo("/admin");
+      }
+
+      const { data: isStaff } = await supabase.rpc("is_staff");
+      if (!isStaff) {
+        await supabase.auth.signOut();
+        return redirectTo("/staff/login");
+      }
+
+      const { data: row } = await supabase
+        .from("staff")
+        .select("is_active")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!row?.is_active) {
+        await supabase.auth.signOut();
+        return redirectTo("/staff/login");
+      }
+    }
+
+    supabaseResponse.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate"
+    );
+    return supabaseResponse;
+  }
+
+  // ---------- Admin routes ----------
+  if (isAdminRoute && !isAdminLogin && !user) {
+    return redirectTo("/admin/login");
+  }
+
+  if (user && isAdminRoute && !isAdminLogin) {
     const { data: isAdmin } = await supabase.rpc("is_admin");
     if (!isAdmin) {
+      const { data: isStaff } = await supabase.rpc("is_staff");
+      if (isStaff) {
+        return redirectTo("/staff");
+      }
       await supabase.auth.signOut();
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/admin/login";
-      return NextResponse.redirect(redirectUrl);
+      return redirectTo("/admin/login");
     }
 
     const { data: aal } =
@@ -63,33 +128,31 @@ export async function updateSession(request: NextRequest) {
       aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2";
 
     if (needsMfa && !isMfaVerify) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/admin/mfa/verify";
-      return NextResponse.redirect(redirectUrl);
+      return redirectTo("/admin/mfa/verify");
     }
 
     if (!needsMfa && isMfaVerify) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/admin";
-      return NextResponse.redirect(redirectUrl);
+      return redirectTo("/admin");
     }
   }
 
-  if (isLoginPage && user) {
+  if (isAdminLogin && user) {
     const { data: isAdmin } = await supabase.rpc("is_admin");
     if (isAdmin) {
       const { data: aal } =
         await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       const needsMfa =
         aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2";
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = needsMfa ? "/admin/mfa/verify" : "/admin";
-      return NextResponse.redirect(redirectUrl);
+      return redirectTo(needsMfa ? "/admin/mfa/verify" : "/admin");
+    }
+
+    const { data: isStaff } = await supabase.rpc("is_staff");
+    if (isStaff) {
+      return redirectTo("/staff");
     }
     await supabase.auth.signOut();
   }
 
-  // Prevent caching of admin HTML for unauthenticated crawlers
   if (isAdminRoute) {
     supabaseResponse.headers.set(
       "Cache-Control",

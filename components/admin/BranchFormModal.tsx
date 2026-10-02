@@ -42,6 +42,9 @@ function emptyForm() {
     timezone: "Asia/Damascus",
     is_active: true,
     sort_order: 0,
+    delivery_fee: 0,
+    min_order_amount: 0,
+    free_delivery_threshold: "" as string | number,
   };
 }
 
@@ -62,6 +65,12 @@ function formFromBranch(branch: Branch) {
     timezone: branch.timezone || "Asia/Damascus",
     is_active: branch.is_active,
     sort_order: branch.sort_order,
+    delivery_fee: Number(branch.delivery_fee ?? 0),
+    min_order_amount: Number(branch.min_order_amount ?? 0),
+    free_delivery_threshold:
+      branch.free_delivery_threshold == null
+        ? ""
+        : Number(branch.free_delivery_threshold),
   };
 }
 
@@ -102,6 +111,12 @@ export function BranchFormModal({
       ? `https://www.google.com/maps?q=${form.latitude},${form.longitude}`
       : form.map_url;
 
+    const freeThresholdRaw = form.free_delivery_threshold;
+    const free_delivery_threshold =
+      freeThresholdRaw === "" || freeThresholdRaw == null
+        ? null
+        : Number(freeThresholdRaw);
+
     const result = await upsertBranch(
       {
         name: form.name,
@@ -118,6 +133,11 @@ export function BranchFormModal({
         ordering_mode: "auto",
         is_active: branch ? form.is_active : true,
         sort_order: Number(form.sort_order) || 0,
+        delivery_fee: Number(form.delivery_fee ?? 0),
+        min_order_amount: Number(form.min_order_amount ?? 0),
+        free_delivery_threshold: Number.isFinite(free_delivery_threshold)
+          ? free_delivery_threshold
+          : null,
       },
       branch?.id
     );
@@ -286,6 +306,49 @@ export function BranchFormModal({
             value={form.sort_order}
             onChange={(e) =>
               setForm((f) => ({ ...f, sort_order: Number(e.target.value) }))
+            }
+          />
+          <Input
+            label="رسوم التوصيل"
+            type="number"
+            dir="ltr"
+            min={0}
+            step="0.01"
+            value={form.delivery_fee}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                delivery_fee: Number(e.target.value ?? 0),
+              }))
+            }
+          />
+          <Input
+            label="الحد الأدنى للطلب"
+            type="number"
+            dir="ltr"
+            min={0}
+            step="0.01"
+            value={form.min_order_amount}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                min_order_amount: Number(e.target.value ?? 0),
+              }))
+            }
+          />
+          <Input
+            label="حد التوصيل المجاني (اختياري)"
+            type="number"
+            dir="ltr"
+            min={0}
+            step="0.01"
+            placeholder="اتركه فارغاً للتعطيل"
+            value={form.free_delivery_threshold}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                free_delivery_threshold: e.target.value,
+              }))
             }
           />
           {branch ? (

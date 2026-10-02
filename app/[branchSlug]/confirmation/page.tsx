@@ -16,10 +16,10 @@ export default async function ConfirmationPage({
   searchParams,
 }: {
   params: Promise<{ branchSlug: string }>;
-  searchParams: Promise<{ order?: string }>;
+  searchParams: Promise<{ order?: string; tracking?: string }>;
 }) {
   const { branchSlug } = await params;
-  const { order } = await searchParams;
+  const { order, tracking } = await searchParams;
 
   return (
     <>
@@ -36,6 +36,13 @@ export default async function ConfirmationPage({
           </p>
         )}
         <p className="mt-3 text-sm text-stone-500">{t.orderConfirmationHint}</p>
+        {tracking && (
+          <Link href={`/order/${tracking}`} className="mt-4">
+            <Button variant="outline" size="lg">
+              تتبع الطلب
+            </Button>
+          </Link>
+        )}
         <Link href={`/${branchSlug}`} className="mt-8">
           <Button size="lg">{t.backToMenu}</Button>
         </Link>

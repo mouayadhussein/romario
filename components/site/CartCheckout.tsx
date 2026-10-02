@@ -23,6 +23,7 @@ import {
   type LatLng,
 } from "@/lib/google-maps";
 import { buildWhatsAppMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
+import { calculateOrderFees } from "@/lib/order-fees";
 import type { Branch, OrderType } from "@/types/database";
 import Link from "next/link";
 
@@ -50,6 +51,39 @@ export function CartCheckout({ branch }: { branch: Branch }) {
 
   const status = useMemo(() => getBranchStatus(branch), [branch]);
   const orderingDisabled = !status.isOpen;
+
+  const deliveryFeeConfigured = Number(branch.delivery_fee ?? 0);
+  const minOrderAmount = Number(branch.min_order_amount ?? 0);
+  const freeDeliveryThreshold =
+    branch.free_delivery_threshold == null
+      ? null
+      : Number(branch.free_delivery_threshold);
+
+  const fees = useMemo(
+    () =>
+      calculateOrderFees({
+        orderType,
+        subtotal: total,
+        deliveryFee: deliveryFeeConfigured,
+        minOrderAmount,
+        freeDeliveryThreshold,
+      }),
+    [
+      orderType,
+      total,
+      deliveryFeeConfigured,
+      minOrderAmount,
+      freeDeliveryThreshold,
+    ]
+  );
+
+  const showFeeBreakdown =
+    orderType === "delivery" &&
+    (deliveryFeeConfigured > 0 ||
+      minOrderAmount > 0 ||
+      freeDeliveryThreshold != null);
+
+  const belowMin = orderType === "delivery" && !fees.minOrderOk;
 
   function handleOrderTypeChange(next: OrderType) {
     setOrderType(next);
@@ -106,6 +140,12 @@ export function CartCheckout({ branch }: { branch: Branch }) {
       toast.error(status.reason || "الفرع مغلق حالياً ولا يمكن إرسال الطلب");
       return;
     }
+    if (belowMin) {
+      toast.error(
+        `الحد الأدنى للطلب ${formatPrice(minOrderAmount)}. ينقصك ${formatPrice(fees.minOrderShortfall)}.`
+      );
+      return;
+    }
     setErrors({});
 
     if (orderType === "delivery") {
@@ -159,6 +199,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         error?: string;
         fieldErrors?: Record<string, string>;
         orderNumber?: string;
+        trackingToken?: string;
+        subtotal?: number;
+        deliveryFee?: number;
         total?: number;
         orderItems?: {
           name: string;
@@ -178,6 +221,7 @@ export function CartCheckout({ branch }: { branch: Branch }) {
       }
 
       const orderNumber = data.orderNumber!;
+      const trackingToken = data.trackingToken;
       const orderItems =
         data.orderItems ??
         items.map((i) => ({
@@ -186,7 +230,13 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           price: i.price,
           note: i.note || null,
         }));
-      const orderTotal = data.total ?? total;
+      const orderTotal = data.total ?? fees.total;
+      const siteOrigin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const trackingUrl =
+        trackingToken && siteOrigin
+          ? `${siteOrigin}/order/${trackingToken}`
+          : null;
 
       clearCart();
 
@@ -202,16 +252,22 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           tableNumber: form.tableNumber,
           generalNote: form.generalNote,
           items: orderItems,
+          subtotal: data.subtotal ?? fees.subtotal,
+          deliveryFee: data.deliveryFee ?? fees.deliveryFee,
           total: orderTotal,
+          trackingUrl,
           branchName: branch.name,
         });
         const url = buildWhatsAppUrl(branch.whatsapp_number, message);
         if (url) window.open(url, "_blank", "noopener,noreferrer");
       }
 
-      router.push(
-        `/${branch.slug}/confirmation?order=${encodeURIComponent(orderNumber)}`
-      );
+      const confirmQs = new URLSearchParams({
+        order: orderNumber,
+      });
+      if (trackingToken) confirmQs.set("tracking", trackingToken);
+
+      router.push(`/${branch.slug}/confirmation?${confirmQs.toString()}`);
     } catch {
       toast.error(
         "تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."
@@ -464,10 +520,40 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         />
 
         <div className="rounded-xl bg-stone-50 p-4">
-          <div className="flex items-center justify-between text-lg font-bold">
-            <span>{t.total}</span>
-            <span className="text-brand-700">{formatPrice(total)}</span>
-          </div>
+          {showFeeBreakdown ? (
+            <div className="space-y-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span>المجموع الفرعي</span>
+                <span dir="ltr">{formatPrice(fees.subtotal)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>
+                  رسوم التوصيل
+                  {fees.freeDeliveryApplied ? " (مجاني)" : ""}
+                </span>
+                <span dir="ltr">{formatPrice(fees.deliveryFee)}</span>
+              </div>
+              {minOrderAmount > 0 && (
+                <p className="text-xs text-stone-500">
+                  الحد الأدنى للطلب: {formatPrice(minOrderAmount)}
+                </p>
+              )}
+              {belowMin && (
+                <p className="text-xs font-medium text-red-600">
+                  ينقصك {formatPrice(fees.minOrderShortfall)} للوصول للحد الأدنى
+                </p>
+              )}
+              <div className="flex items-center justify-between border-t border-stone-200 pt-2 text-lg font-bold">
+                <span>{t.total}</span>
+                <span className="text-brand-700">{formatPrice(fees.total)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-lg font-bold">
+              <span>{t.total}</span>
+              <span className="text-brand-700">{formatPrice(fees.total)}</span>
+            </div>
+          )}
           <p className="mt-1 text-sm font-medium text-emerald-700">
             {t.cashOnDelivery}
           </p>
@@ -482,11 +568,13 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           size="lg"
           className="w-full"
           loading={loading}
-          disabled={orderingDisabled}
+          disabled={orderingDisabled || belowMin}
         >
           {orderingDisabled
             ? "الفرع مغلق — لا يمكن إرسال الطلب"
-            : t.submitOrder}
+            : belowMin
+              ? "أضف أصنافاً للوصول للحد الأدنى"
+              : t.submitOrder}
         </Button>
       </form>
 
