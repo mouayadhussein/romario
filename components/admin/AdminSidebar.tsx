@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Store, LogOut } from "lucide-react";
+import { LayoutDashboard, Store, LogOut, Shield } from "lucide-react";
 import { logoutAction } from "@/lib/admin-actions";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 const links = [
   { href: "/admin", label: "الطلبات", icon: LayoutDashboard },
   { href: "/admin/branches", label: "الفروع والأصناف", icon: Store },
+  { href: "/admin/mfa/setup", label: "الأمان (MFA)", icon: Shield },
 ];
 
 export function AdminSidebar() {

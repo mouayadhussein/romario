@@ -1,0 +1,195 @@
+/**
+ * RLS smoke checks using the anon key only.
+ * Expected: sensitive reads/writes fail; public menu reads succeed for active data.
+ *
+ * Usage: npm run rls-check
+ * Requires NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY in env.
+ */
+
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { createClient } from "@supabase/supabase-js";
+
+function loadEnvFile(file: string) {
+  const p = resolve(process.cwd(), file);
+  if (!existsSync(p)) return;
+  for (const line of readFileSync(p, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+}
+
+loadEnvFile(".env.local");
+loadEnvFile(".env");
+
+type CheckResult = {
+  name: string;
+  expected: "deny" | "allow";
+  passed: boolean;
+  detail: string;
+};
+
+function env(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing ${name}`);
+  return v;
+}
+
+async function main() {
+  const url = env("NEXT_PUBLIC_SUPABASE_URL");
+  const anon = env("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const supabase = createClient(url, anon, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const results: CheckResult[] = [];
+
+  async function expectDeny(
+    name: string,
+    run: () => Promise<{ error: { message: string } | null; data: unknown }>
+  ) {
+    const { error, data } = await run();
+    const empty =
+      data == null ||
+      (Array.isArray(data) && data.length === 0) ||
+      (typeof data === "object" && data !== null && !Array.isArray(data) && Object.keys(data as object).length === 0);
+    const denied = Boolean(error) || empty;
+    results.push({
+      name,
+      expected: "deny",
+      passed: denied,
+      detail: error?.message ?? (empty ? "empty/null (treated as deny)" : "unexpected data returned"),
+    });
+  }
+
+  async function expectAllow(
+    name: string,
+    run: () => Promise<{ error: { message: string } | null; data: unknown }>
+  ) {
+    const { error, data } = await run();
+    const ok = !error;
+    results.push({
+      name,
+      expected: "allow",
+      passed: ok,
+      detail: error?.message ?? (Array.isArray(data) ? `rows=${data.length}` : "ok"),
+    });
+  }
+
+  await expectDeny("select orders", async () => {
+    const res = await supabase.from("orders").select("id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select order_items", async () => {
+    const res = await supabase.from("order_items").select("id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select admins", async () => {
+    const res = await supabase.from("admins").select("user_id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select branch_counters", async () => {
+    const res = await supabase.from("branch_counters").select("branch_id").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("insert orders", async () => {
+    const res = await supabase.from("orders").insert({
+      order_number: "HACK-1",
+      branch_id: "00000000-0000-0000-0000-000000000000",
+      customer_name: "x",
+      customer_phone: "12345678",
+      order_type: "pickup",
+      total: 1,
+    });
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("update branches", async () => {
+    const res = await supabase
+      .from("branches")
+      .update({ name: "hacked" })
+      .eq("is_active", true);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("delete categories", async () => {
+    const res = await supabase.from("categories").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("rpc generate_order_number", async () => {
+    const res = await supabase.rpc("generate_order_number", {
+      p_branch_id: "00000000-0000-0000-0000-000000000000",
+    });
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("storage upload", async () => {
+    const res = await supabase.storage
+      .from("menu-images")
+      .upload(`rls-check/${Date.now()}.txt`, new Blob(["nope"]), {
+        contentType: "text/plain",
+        upsert: false,
+      });
+    return { error: res.error, data: res.data };
+  });
+
+  await expectAllow("select active branches", async () => {
+    const res = await supabase
+      .from("branches")
+      .select("id, name, slug")
+      .eq("is_active", true)
+      .limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectAllow("select active categories", async () => {
+    const res = await supabase
+      .from("categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectAllow("select menu items (available and unavailable)", async () => {
+    const res = await supabase
+      .from("items")
+      .select("id, name, price, is_available")
+      .limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  const failed = results.filter((r) => !r.passed);
+  for (const r of results) {
+    const mark = r.passed ? "PASS" : "FAIL";
+    console.log(`[${mark}] ${r.expected.toUpperCase()} ${r.name} — ${r.detail}`);
+  }
+
+  if (failed.length > 0) {
+    console.error(`\n${failed.length} check(s) failed`);
+    process.exit(1);
+  }
+
+  console.log(`\nAll ${results.length} RLS checks passed`);
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : "rls-check failed");
+  process.exit(1);
+});

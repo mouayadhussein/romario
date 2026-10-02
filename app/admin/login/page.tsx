@@ -26,13 +26,20 @@ export default function AdminLoginPage() {
             toast.error(result.error);
             return;
           }
+          if (result.needsMfa) {
+            router.push("/admin/mfa/verify");
+            router.refresh();
+            return;
+          }
           router.push("/admin");
           router.refresh();
         }}
       >
         <div>
           <h1 className="text-xl font-bold text-stone-900">تسجيل الدخول</h1>
-          <p className="text-sm text-stone-500">{config.appName} — لوحة التحكم</p>
+          <p className="text-sm text-stone-500">
+            {config.appName} — لوحة التحكم
+          </p>
         </div>
         <Input
           label="البريد الإلكتروني"

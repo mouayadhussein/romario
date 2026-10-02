@@ -66,7 +66,9 @@ export default async function HomePage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("branches")
-    .select("*")
+    .select(
+      "id, name, slug, address, phone, whatsapp_number, map_url, latitude, longitude, working_hours, opening_hours, timezone, ordering_mode, is_active, sort_order"
+    )
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
 
@@ -80,7 +82,7 @@ export default async function HomePage() {
   if (branchIds.length > 0) {
     const { data: catsData } = await supabase
       .from("categories")
-      .select("*")
+      .select("id, branch_id, name, image_url, is_active, sort_order")
       .in("branch_id", branchIds)
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
@@ -92,7 +94,9 @@ export default async function HomePage() {
     if (categoryIds.length > 0) {
       const { data: itemsData } = await supabase
         .from("items")
-        .select("*")
+        .select(
+          "id, category_id, name, description, price, image_url, is_available, sort_order"
+        )
         .in("category_id", categoryIds)
         .eq("is_available", true)
         .order("sort_order", { ascending: true });
@@ -138,7 +142,7 @@ export default async function HomePage() {
 
       {error ? (
         <div className="px-4 py-10">
-          <EmptyState title="تعذّر تحميل الفروع" description={error.message} />
+          <EmptyState title="تعذّر تحميل الفروع" description="حاول مرة أخرى لاحقاً" />
         </div>
       ) : branches.length === 0 ? (
         <div className="px-4 py-10">

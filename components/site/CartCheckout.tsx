@@ -115,9 +115,17 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         : { customerLat: null, customerLng: null };
 
     try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
       const res = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           branchId: branch.id,
           customerName: form.customerName,
@@ -183,7 +191,7 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           branchName: branch.name,
         });
         const url = buildWhatsAppUrl(branch.whatsapp_number, message);
-        if (url) window.open(url, "_blank");
+        if (url) window.open(url, "_blank", "noopener,noreferrer");
       }
 
       router.push(
@@ -439,6 +447,10 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           </div>
           <p className="mt-1 text-sm font-medium text-emerald-700">
             {t.cashOnDelivery}
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-stone-500">
+            بياناتك (الاسم، الهاتف، العنوان، الموقع) تُستخدم فقط لتنفيذ هذا
+            الطلب والتواصل معك بشأنه، ولا تُشارك مع أطراف أخرى لأغراض تسويقية.
           </p>
         </div>
 

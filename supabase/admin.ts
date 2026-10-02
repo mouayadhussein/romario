@@ -1,18 +1,16 @@
+import "server-only";
+
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { getEnv } from "@/lib/env";
 
 /**
- * Service-role client — server only. Never import this in client components.
+ * Service-role client — server only. Never import from client components.
  */
 export function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const env = getEnv();
 
-  if (!url || !key) {
-    throw new Error("Missing Supabase service role configuration");
-  }
-
-  return createClient<Database>(url, key, {
+  return createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

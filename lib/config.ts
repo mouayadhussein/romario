@@ -9,7 +9,7 @@ export const config = {
     windowMs: 60_000,
     maxRequests: 10,
   },
-  imageMaxSizeMB: 1,
+  imageMaxSizeMB: 2,
   imageMaxWidthOrHeight: 1200,
 } as const;
 

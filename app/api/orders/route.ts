@@ -1,26 +1,93 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/supabase/admin";
 import { createOrderSchema } from "@/lib/validations";
-import { checkRateLimit } from "@/lib/rate-limit";
+import {
+  checkOrderIpRateLimit,
+  checkOrderPhoneRateLimit,
+} from "@/lib/rate-limit";
 import { sanitizeNote } from "@/lib/utils";
 import { getBranchStatus } from "@/lib/opening-hours";
+import { logger } from "@/lib/logger";
+import {
+  assertAllowedOrigin,
+  assertBodySize,
+  getClientIp,
+} from "@/lib/security";
+
+/** Short-lived idempotency cache (per instance; Upstash optional later). */
+const idempotencyCache = new Map<
+  string,
+  { expiresAt: number; body: unknown; status: number }
+>();
+
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
+
+function rememberIdempotent(key: string, status: number, body: unknown) {
+  idempotencyCache.set(key, {
+    expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+    body,
+    status,
+  });
+}
+
+function getIdempotent(key: string) {
+  const entry = idempotencyCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    idempotencyCache.delete(key);
+    return null;
+  }
+  return entry;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const originCheck = assertAllowedOrigin(request);
+    if (!originCheck.ok) {
+      return NextResponse.json(
+        { error: originCheck.error },
+        { status: originCheck.status }
+      );
+    }
 
-    const { allowed } = checkRateLimit(`orders:${ip}`);
-    if (!allowed) {
+    const sizeCheck = assertBodySize(request);
+    if (!sizeCheck.ok) {
+      return NextResponse.json(
+        { error: sizeCheck.error },
+        { status: sizeCheck.status }
+      );
+    }
+
+    const ip = getClientIp(request);
+    const ipLimit = await checkOrderIpRateLimit(ip);
+    if (!ipLimit.allowed) {
       return NextResponse.json(
         { error: "عدد الطلبات كبير جداً، حاول لاحقاً" },
         { status: 429 }
       );
     }
 
-    const body: unknown = await request.json();
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+    if (idempotencyKey) {
+      if (idempotencyKey.length > 128 || !/^[\w\-.:]+$/.test(idempotencyKey)) {
+        return NextResponse.json(
+          { error: "مفتاح التكرار غير صالح" },
+          { status: 400 }
+        );
+      }
+      const cached = getIdempotent(idempotencyKey);
+      if (cached) {
+        return NextResponse.json(cached.body, { status: cached.status });
+      }
+    }
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "بيانات غير صالحة" }, { status: 400 });
+    }
+
     const parsed = createOrderSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -36,6 +103,15 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parsed.data;
+
+    const phoneLimit = await checkOrderPhoneRateLimit(data.customerPhone);
+    if (!phoneLimit.allowed) {
+      return NextResponse.json(
+        { error: "تم تجاوز حد الطلبات لهذا الرقم، حاول لاحقاً" },
+        { status: 429 }
+      );
+    }
+
     const supabase = createServiceClient();
 
     const { data: branch, error: branchError } = await supabase
@@ -66,14 +142,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const itemIds = data.items.map((i) => i.itemId);
+    const itemIds = [...new Set(data.items.map((i) => i.itemId))];
     const { data: dbItems, error: itemsError } = await supabase
       .from("items")
-      .select("id, name, price, is_available, category_id, categories!inner(branch_id, is_active)")
+      .select(
+        "id, name, price, is_available, category_id, categories!inner(branch_id, is_active)"
+      )
       .in("id", itemIds);
 
     if (itemsError || !dbItems) {
-      return NextResponse.json({ error: "فشل التحقق من الأصناف" }, { status: 500 });
+      logger.error("orders.items_lookup_failed", {
+        code: itemsError?.code ?? "unknown",
+      });
+      return NextResponse.json(
+        { error: "فشل التحقق من الأصناف" },
+        { status: 500 }
+      );
     }
 
     type JoinedItem = {
@@ -134,14 +218,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Atomic order number via SECURITY DEFINER RPC (service_role only)
     const { data: orderNumber, error: numError } = await supabase.rpc(
       "generate_order_number",
       { p_branch_id: data.branchId }
     );
 
     if (numError || !orderNumber) {
-      console.error("generate_order_number error:", numError);
+      logger.error("orders.number_failed", { code: numError?.code ?? "unknown" });
       return NextResponse.json(
         { error: "فشل إنشاء رقم الطلب" },
         { status: 500 }
@@ -164,7 +247,7 @@ export async function POST(request: NextRequest) {
       .insert({
         order_number: finalOrderNumber,
         branch_id: data.branchId,
-        customer_name: data.customerName.trim(),
+        customer_name: sanitizeNote(data.customerName, 100) ?? data.customerName.trim(),
         customer_phone: data.customerPhone.trim(),
         customer_address: sanitizeNote(data.customerAddress, 300),
         customer_lat: customerLat,
@@ -179,7 +262,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (orderError || !order) {
-      console.error("Order insert error:", orderError);
+      logger.error("orders.insert_failed", { code: orderError?.code ?? "unknown" });
       return NextResponse.json({ error: "فشل حفظ الطلب" }, { status: 500 });
     }
 
@@ -191,12 +274,17 @@ export async function POST(request: NextRequest) {
     );
 
     if (linesError) {
-      console.error("Order items insert error:", linesError);
+      logger.error("orders.items_insert_failed", {
+        code: linesError.code ?? "unknown",
+      });
       await supabase.from("orders").delete().eq("id", order.id);
-      return NextResponse.json({ error: "فشل حفظ أصناف الطلب" }, { status: 500 });
+      return NextResponse.json(
+        { error: "فشل حفظ أصناف الطلب" },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({
+    const responseBody = {
       orderId: order.id,
       orderNumber: order.order_number,
       total: Number(order.total),
@@ -206,9 +294,20 @@ export async function POST(request: NextRequest) {
         price: l.price_snapshot,
         note: l.note,
       })),
-    });
+    };
+
+    if (idempotencyKey) {
+      rememberIdempotent(idempotencyKey, 200, responseBody);
+    }
+
+    return NextResponse.json(responseBody);
   } catch (err) {
-    console.error("Order API error:", err);
-    return NextResponse.json({ error: "خطأ داخلي في الخادم" }, { status: 500 });
+    logger.error("orders.unhandled", {
+      name: err instanceof Error ? err.name : "unknown",
+    });
+    return NextResponse.json(
+      { error: "خطأ داخلي في الخادم" },
+      { status: 500 }
+    );
   }
 }

@@ -21,7 +21,9 @@ export default async function CartPage({
   const supabase = await createClient();
   const { data: branch } = await supabase
     .from("branches")
-    .select("*")
+    .select(
+      "id, name, slug, address, phone, whatsapp_number, map_url, latitude, longitude, working_hours, opening_hours, timezone, ordering_mode, is_active, sort_order"
+    )
     .eq("slug", branchSlug)
     .eq("is_active", true)
     .single();

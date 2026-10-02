@@ -5,9 +5,10 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLogin = pathname === "/admin/login";
+  const bare =
+    pathname === "/admin/login" || pathname === "/admin/mfa/verify";
 
-  if (isLogin) {
+  if (bare) {
     return <div className="min-h-screen bg-stone-100">{children}</div>;
   }
 

@@ -1,22 +1,62 @@
-import { config } from "./config";
+import "server-only";
+
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+import { config } from "@/lib/config";
+import { getEnv, hasUpstash } from "@/lib/env";
+import { logger } from "@/lib/logger";
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 
-const store = new Map<string, RateLimitEntry>();
+const memoryStore = new Map<string, RateLimitEntry>();
 
-export function checkRateLimit(
+let warnedMissingUpstash = false;
+let redisClient: Redis | null = null;
+const limiters = new Map<string, Ratelimit>();
+
+function getRedis(): Redis | null {
+  if (!hasUpstash()) return null;
+  if (redisClient) return redisClient;
+  const env = getEnv();
+  redisClient = new Redis({
+    url: env.UPSTASH_REDIS_REST_URL!,
+    token: env.UPSTASH_REDIS_REST_TOKEN!,
+  });
+  return redisClient;
+}
+
+function getLimiter(name: string, max: number, windowMs: number): Ratelimit | null {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  const key = `${name}:${max}:${windowMs}`;
+  let limiter = limiters.get(key);
+  if (!limiter) {
+    const seconds = Math.max(1, Math.ceil(windowMs / 1000));
+    limiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(max, `${seconds} s`),
+      prefix: `rl:${name}`,
+      analytics: false,
+    });
+    limiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+function memoryCheck(
   key: string,
-  maxRequests = config.rateLimit.maxRequests,
-  windowMs = config.rateLimit.windowMs
+  maxRequests: number,
+  windowMs: number
 ): { allowed: boolean; remaining: number } {
   const now = Date.now();
-  const entry = store.get(key);
+  const entry = memoryStore.get(key);
 
   if (!entry || now > entry.resetAt) {
-    store.set(key, { count: 1, resetAt: now + windowMs });
+    memoryStore.set(key, { count: 1, resetAt: now + windowMs });
     return { allowed: true, remaining: maxRequests - 1 };
   }
 
@@ -28,12 +68,57 @@ export function checkRateLimit(
   return { allowed: true, remaining: maxRequests - entry.count };
 }
 
-// Periodic cleanup to avoid unbounded memory growth
+/**
+ * Distributed rate limit when Upstash is configured; otherwise in-memory fallback.
+ * In production without Upstash: still enforces per-instance memory limit and logs a warning once.
+ */
+export async function checkRateLimit(
+  key: string,
+  maxRequests: number = config.rateLimit.maxRequests,
+  windowMs: number = config.rateLimit.windowMs
+): Promise<{ allowed: boolean; remaining: number; backend: "upstash" | "memory" }> {
+  const limiter = getLimiter("default", maxRequests, windowMs);
+
+  if (!limiter) {
+    if (getEnv().NODE_ENV === "production" && !warnedMissingUpstash) {
+      warnedMissingUpstash = true;
+      logger.warn(
+        "UPSTASH_REDIS_REST_URL/TOKEN missing — using in-memory rate limit (not shared across serverless instances)"
+      );
+    }
+    const result = memoryCheck(key, maxRequests, windowMs);
+    return { ...result, backend: "memory" };
+  }
+
+  const result = await limiter.limit(key);
+  return {
+    allowed: result.success,
+    remaining: result.remaining,
+    backend: "upstash",
+  };
+}
+
+/** Login: 5 attempts / 15 minutes per key (IP or email). */
+export async function checkLoginRateLimit(key: string) {
+  return checkRateLimit(`login:${key}`, 5, 15 * 60_000);
+}
+
+/** Orders: 10 / minute per IP (config default). */
+export async function checkOrderIpRateLimit(ip: string) {
+  return checkRateLimit(`orders:ip:${ip}`);
+}
+
+/** Orders: 5 / hour per phone number. */
+export async function checkOrderPhoneRateLimit(phone: string) {
+  const normalized = phone.replace(/\D/g, "");
+  return checkRateLimit(`orders:phone:${normalized}`, 5, 60 * 60_000);
+}
+
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
     const now = Date.now();
-    for (const [key, entry] of store.entries()) {
-      if (now > entry.resetAt) store.delete(key);
+    for (const [key, entry] of memoryStore.entries()) {
+      if (now > entry.resetAt) memoryStore.delete(key);
     }
   }, 60_000).unref?.();
 }

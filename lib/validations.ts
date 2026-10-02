@@ -12,27 +12,37 @@ import { normalizeWhatsappNumber } from "@/lib/whatsapp";
 const optionalUrl = z
   .string()
   .trim()
+  .max(500, "الرابط طويل جداً")
   .optional()
   .nullable()
   .refine((v) => !v || v === "" || z.string().url().safeParse(v).success, {
     message: "رابط غير صالح",
   });
 
-/** Names/titles/descriptions: Arabic, English, digits — no charset restrictions */
+/** Reject HTML / angle brackets in user-facing text fields. */
+/** Names/titles/descriptions: Arabic, English, digits — no HTML */
 const nameField = (label = "الاسم") =>
   z
     .string({ error: `${label} مطلوب` })
     .trim()
     .min(1, `${label} مطلوب`)
-    .max(100, `${label} طويل جداً`);
+    .max(100, `${label} طويل جداً`)
+    .refine((v) => !/[<>]/.test(v), { message: "لا يُسمح بوسوم HTML" });
 
 const descriptionField = z
   .string()
   .trim()
   .max(500, "الوصف طويل جداً")
+  .refine((v) => !/[<>]/.test(v), { message: "لا يُسمح بوسوم HTML" })
   .optional()
   .nullable();
 
+const plainText = (max: number, tooLong: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, tooLong)
+    .refine((v) => !/[<>]/.test(v), { message: "لا يُسمح بوسوم HTML" });
 /** Slug: optional; when provided must be a-z, 0-9, hyphens only */
 const slugField = z
   .string()
@@ -92,15 +102,17 @@ const openingHoursSchema = z
     return cleaned;
   });
 
-export const orderItemSchema = z.object({
-  itemId: z.string().uuid({ error: "معرّف الصنف غير صالح" }),
-  quantity: z
-    .number({ error: "الكمية غير صالحة" })
-    .int("الكمية يجب أن تكون عدداً صحيحاً")
-    .min(1, "الكمية يجب أن تكون 1 على الأقل")
-    .max(99, "الكمية كبيرة جداً"),
-  note: z.string().max(200, "الملاحظة طويلة جداً").optional().nullable(),
-});
+export const orderItemSchema = z
+  .object({
+    itemId: z.string().uuid({ error: "معرّف الصنف غير صالح" }),
+    quantity: z
+      .number({ error: "الكمية غير صالحة" })
+      .int("الكمية يجب أن تكون عدداً صحيحاً")
+      .min(1, "الكمية يجب أن تكون 1 على الأقل")
+      .max(20, "الكمية يجب ألا تتجاوز 20"),
+    note: plainText(200, "الملاحظة طويلة جداً").optional().nullable(),
+  })
+  .strict();
 
 export const createOrderSchema = z
   .object({
@@ -112,12 +124,7 @@ export const createOrderSchema = z
       .min(8, "رقم الهاتف قصير جداً")
       .max(20, "رقم الهاتف طويل جداً")
       .regex(/^[\d+\-\s]+$/, "رقم هاتف غير صالح"),
-    customerAddress: z
-      .string()
-      .trim()
-      .max(300, "العنوان طويل جداً")
-      .optional()
-      .nullable(),
+    customerAddress: plainText(300, "العنوان طويل جداً").optional().nullable(),
     customerLat: z
       .number({ error: "خط العرض غير صالح" })
       .min(-90, "خط العرض غير صالح")
@@ -133,23 +140,14 @@ export const createOrderSchema = z
     orderType: z.enum(["delivery", "pickup", "dine_in"], {
       error: "نوع الطلب غير صالح",
     }),
-    tableNumber: z
-      .string()
-      .trim()
-      .max(20, "رقم الطاولة طويل جداً")
-      .optional()
-      .nullable(),
-    generalNote: z
-      .string()
-      .trim()
-      .max(500, "الملاحظة طويلة جداً")
-      .optional()
-      .nullable(),
+    tableNumber: plainText(20, "رقم الطاولة طويل جداً").optional().nullable(),
+    generalNote: plainText(500, "الملاحظة طويلة جداً").optional().nullable(),
     items: z
       .array(orderItemSchema)
       .min(1, "أضف وجبة واحدة على الأقل")
       .max(50, "عدد الوجبات كبير جداً"),
   })
+  .strict()
   .superRefine((data, ctx) => {
     if (data.orderType === "delivery" && !data.customerAddress?.trim()) {
       ctx.addIssue({
@@ -182,12 +180,7 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export const branchSchema = z.object({
   name: nameField("اسم الفرع"),
   slug: slugField,
-  address: z
-    .string()
-    .trim()
-    .max(300, "العنوان طويل جداً")
-    .optional()
-    .nullable(),
+  address: plainText(300, "العنوان طويل جداً").optional().nullable(),
   phone: z
     .string()
     .trim()

@@ -13,7 +13,9 @@ async function getBranchMenu(slug: string) {
 
   const { data: branch } = await supabase
     .from("branches")
-    .select("*")
+    .select(
+      "id, name, slug, address, phone, whatsapp_number, map_url, latitude, longitude, working_hours, opening_hours, timezone, ordering_mode, is_active, sort_order"
+    )
     .eq("slug", slug)
     .eq("is_active", true)
     .single();
@@ -24,7 +26,7 @@ async function getBranchMenu(slug: string) {
 
   const { data: categories } = await supabase
     .from("categories")
-    .select("*")
+    .select("id, branch_id, name, image_url, is_active, sort_order")
     .eq("branch_id", typedBranch.id)
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -36,7 +38,9 @@ async function getBranchMenu(slug: string) {
   if (categoryIds.length > 0) {
     const { data: itemsData } = await supabase
       .from("items")
-      .select("*")
+      .select(
+        "id, category_id, name, description, price, image_url, is_available, sort_order"
+      )
       .in("category_id", categoryIds)
       .order("sort_order", { ascending: true });
     items = (itemsData ?? []) as Item[];
