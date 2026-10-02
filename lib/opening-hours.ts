@@ -282,7 +282,12 @@ function findActivePeriod(
 
 function formatPeriodsText(periods: TimeRange[]): string {
   if (periods.length === 0) return "مغلق";
-  return periods.map((p) => `${p.open} – ${p.close}`).join("، ");
+  return periods.map((p) => `من ${p.open} إلى ${p.close}`).join("، ");
+}
+
+/** Arabic 24h range text for one or more periods (or «مغلق»). */
+export function formatDayHoursText(periods: TimeRange[]): string {
+  return formatPeriodsText(periods);
 }
 
 export function formatWeeklyHoursText(hours: OpeningHours): string {

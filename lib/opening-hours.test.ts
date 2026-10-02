@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDayHoursText,
   getBranchStatus,
   getZonedParts,
   isMinutesInPeriod,
@@ -28,6 +29,21 @@ const weekdaySchedule: OpeningHours = {
   sat: [{ open: "10:00", close: "23:00" }],
   sun: [],
 };
+
+describe("formatDayHoursText", () => {
+  it("uses Arabic 24h ranges without AM/PM", () => {
+    expect(formatDayHoursText([])).toBe("مغلق");
+    expect(
+      formatDayHoursText([{ open: "08:00", close: "22:00" }])
+    ).toBe("من 08:00 إلى 22:00");
+    expect(
+      formatDayHoursText([
+        { open: "09:00", close: "14:00" },
+        { open: "17:00", close: "23:00" },
+      ])
+    ).toBe("من 09:00 إلى 14:00، من 17:00 إلى 23:00");
+  });
+});
 
 describe("isMinutesInPeriod", () => {
   it("handles same-day periods", () => {
@@ -69,7 +85,7 @@ describe("getBranchStatus — normal day", () => {
 
     expect(status.isOpen).toBe(true);
     expect(status.reason).toContain("مفتوح الآن حتى 22:00");
-    expect(status.todayHoursText).toContain("09:00");
+    expect(status.todayHoursText).toBe("من 09:00 إلى 22:00");
   });
 
   it("is closed before opening", () => {

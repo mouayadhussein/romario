@@ -2,10 +2,10 @@
 
 import { Plus, Copy, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import {
   ARABIC_DAY_ORDER,
   DAY_LABELS_AR,
+  isValidHHMM,
   type DayKey,
   type OpeningHours,
   type TimeRange,
@@ -13,6 +13,71 @@ import {
 
 function periodsFor(hours: OpeningHours, day: DayKey): TimeRange[] {
   return hours[day] ?? [];
+}
+
+const HOURS_24 = Array.from({ length: 24 }, (_, i) =>
+  String(i).padStart(2, "0")
+);
+const MINUTES = Array.from({ length: 12 }, (_, i) =>
+  String(i * 5).padStart(2, "0")
+);
+
+function splitHHMM(value: string): { h: string; m: string } {
+  if (isValidHHMM(value)) {
+    return { h: value.slice(0, 2), m: value.slice(3, 5) };
+  }
+  return { h: "09", m: "00" };
+}
+
+/** Always shows 24h (00–23) — never browser AM/PM. */
+function Time24Select({
+  label,
+  value,
+  onChange,
+}: {
+  label?: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const { h, m } = splitHHMM(value);
+  const minuteOptions = MINUTES.includes(m) ? MINUTES : [...MINUTES, m].sort();
+
+  return (
+    <div className="w-auto">
+      {label && (
+        <span className="mb-1.5 block text-sm font-medium text-stone-700">
+          {label}
+        </span>
+      )}
+      <div className="flex items-center gap-1" dir="ltr">
+        <select
+          aria-label={label ? `${label} — الساعة` : "الساعة"}
+          className="h-10 rounded-lg border border-stone-300 bg-white px-2 text-sm text-stone-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          value={h}
+          onChange={(e) => onChange(`${e.target.value}:${m}`)}
+        >
+          {HOURS_24.map((hour) => (
+            <option key={hour} value={hour}>
+              {hour}
+            </option>
+          ))}
+        </select>
+        <span className="text-stone-500">:</span>
+        <select
+          aria-label={label ? `${label} — الدقيقة` : "الدقيقة"}
+          className="h-10 rounded-lg border border-stone-300 bg-white px-2 text-sm text-stone-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          value={m}
+          onChange={(e) => onChange(`${h}:${e.target.value}`)}
+        >
+          {minuteOptions.map((min) => (
+            <option key={min} value={min}>
+              {min}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 }
 
 export function OpeningHoursEditor({
@@ -25,7 +90,7 @@ export function OpeningHoursEditor({
   function setDayOpen(day: DayKey, open: boolean) {
     const next = { ...value };
     if (open) {
-      next[day] = [{ open: "09:00", close: "22:00" }];
+      next[day] = [{ open: "08:00", close: "22:00" }];
     } else {
       next[day] = [];
     }
@@ -64,7 +129,14 @@ export function OpeningHoursEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-stone-800">ساعات العمل الأسبوعية</p>
+      <div>
+        <p className="text-sm font-medium text-stone-800">
+          ساعات العمل الأسبوعية
+        </p>
+        <p className="mt-0.5 text-xs text-stone-500">
+          بنظام 24 ساعة (مثال: من 08:00 إلى 22:00) — بدون AM/PM
+        </p>
+      </div>
       <div className="space-y-2">
         {ARABIC_DAY_ORDER.map((day) => {
           const periods = periodsFor(value, day);
@@ -117,25 +189,20 @@ export function OpeningHoursEditor({
                       key={`${day}-${index}`}
                       className="flex flex-wrap items-end gap-2"
                     >
-                      <Input
-                        label={index === 0 ? "فتح" : undefined}
-                        type="time"
-                        dir="ltr"
+                      <Time24Select
+                        label={index === 0 ? "من" : undefined}
                         value={period.open}
-                        onChange={(e) =>
-                          updatePeriod(day, index, { open: e.target.value })
+                        onChange={(open) =>
+                          updatePeriod(day, index, { open })
                         }
-                        className="w-32"
                       />
-                      <Input
-                        label={index === 0 ? "إغلاق" : undefined}
-                        type="time"
-                        dir="ltr"
+                      <span className="mb-2.5 text-sm text-stone-500">إلى</span>
+                      <Time24Select
+                        label={index === 0 ? "إلى" : undefined}
                         value={period.close}
-                        onChange={(e) =>
-                          updatePeriod(day, index, { close: e.target.value })
+                        onChange={(close) =>
+                          updatePeriod(day, index, { close })
                         }
-                        className="w-32"
                       />
                       {periods.length > 1 && (
                         <Button
@@ -152,7 +219,7 @@ export function OpeningHoursEditor({
                   ))}
                   <p className="text-xs text-stone-500">
                     للإغلاق بعد منتصف الليل: ضع وقت الإغلاق أصغر من الفتح (مثال
-                    18:00 → 02:00).
+                    من 18:00 إلى 02:00).
                   </p>
                 </div>
               )}

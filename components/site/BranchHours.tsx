@@ -8,6 +8,7 @@ import {
   DAY_LABELS_AR,
   ARABIC_DAY_ORDER,
   getDayPeriods,
+  formatDayHoursText,
 } from "@/lib/opening-hours";
 import type { Branch } from "@/types/database";
 
@@ -182,18 +183,13 @@ export function BranchWeeklyHours({
           >
             {ARABIC_DAY_ORDER.map((day) => {
               const periods = getDayPeriods(branch.opening_hours, day);
-              const text =
-                periods.length === 0
-                  ? "مغلق"
-                  : periods.map((p) => `${p.open} – ${p.close}`).join("، ");
+              const text = formatDayHoursText(periods);
               return (
                 <li key={day} className="flex justify-between gap-3">
                   <span className="font-medium text-stone-700">
                     {DAY_LABELS_AR[day]}
                   </span>
-                  <span dir="ltr" className="text-left">
-                    {text}
-                  </span>
+                  <span className="text-end">{text}</span>
                 </li>
               );
             })}
