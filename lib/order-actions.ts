@@ -14,6 +14,11 @@ import {
   cancelReasonLabel,
 } from "@/lib/order-status";
 import { calculateStaffCashBalance } from "@/lib/staff-cash";
+import {
+  STAFF_HAS_RECORDS_MSG,
+  canHardDeleteStaff,
+  type StaffRecordCounts,
+} from "@/lib/staff-guards";
 import { logger } from "@/lib/logger";
 import type { OrderStatus } from "@/types/database";
 
@@ -22,6 +27,9 @@ type ActionResult = {
   success?: boolean;
   tempPassword?: string;
   userId?: string;
+  /** Soft-delete of delivered order with cash collected */
+  cashWarning?: boolean;
+  collectedAmount?: number;
 };
 
 async function getOrderOrThrow(orderId: string, includeDeleted = false) {
@@ -140,6 +148,14 @@ export async function softDeleteOrder(orderId: string): Promise<ActionResult> {
   const { error, order } = await getOrderOrThrow(orderId);
   if (error || !order) return { error: error ?? "الطلب غير موجود" };
 
+  const collected =
+    order.collected_amount != null ? Number(order.collected_amount) : null;
+  const hasCashOnDelivered =
+    order.status === "delivered" &&
+    collected != null &&
+    Number.isFinite(collected) &&
+    collected > 0;
+
   const admin = createServiceClient();
   const { error: upErr } = await admin
     .from("orders")
@@ -157,11 +173,23 @@ export async function softDeleteOrder(orderId: string): Promise<ActionResult> {
     event: "soft_deleted",
     fromStatus: order.status,
     toStatus: order.status,
+    meta: hasCashOnDelivered
+      ? {
+          warning: "delivered_with_collected_amount",
+          collected_amount: collected,
+          note: "طلب موصّل عليه مبلغ محصّل نُقل إلى سلة المحذوفات — يبقى في حساب رصيد الموظف",
+        }
+      : {},
   });
 
   revalidatePath("/admin");
   revalidatePath("/admin/trash");
-  return { success: true };
+  revalidatePath("/admin/cash");
+  return {
+    success: true,
+    cashWarning: hasCashOnDelivered,
+    collectedAmount: hasCashOnDelivered ? collected! : undefined,
+  };
 }
 
 export async function restoreOrder(orderId: string): Promise<ActionResult> {
@@ -389,23 +417,62 @@ export async function resetStaffPassword(userId: string): Promise<ActionResult> 
   return { success: true, tempPassword };
 }
 
+export async function getStaffRecordCounts(
+  userId: string
+): Promise<StaffRecordCounts> {
+  const admin = createServiceClient();
+  const [{ count: orderCount }, { count: settlementCount }] = await Promise.all([
+    admin
+      .from("orders")
+      .select("*", { count: "exact", head: true })
+      .eq("assigned_to", userId),
+    admin
+      .from("cash_settlements")
+      .select("*", { count: "exact", head: true })
+      .eq("staff_id", userId),
+  ]);
+
+  return {
+    assignedOrderCount: orderCount ?? 0,
+    settlementCount: settlementCount ?? 0,
+  };
+}
+
 export async function deleteStaffAction(userId: string): Promise<ActionResult> {
   await requireAdmin();
   const admin = createServiceClient();
-  const { count } = await admin
-    .from("orders")
-    .select("*", { count: "exact", head: true })
-    .eq("assigned_to", userId)
-    .eq("status", "on_the_way")
-    .is("deleted_at", null);
-  if ((count ?? 0) > 0) {
-    return { error: "لا يمكن حذف موظف لديه طلبات بالطريق. أعد إسنادها أولاً." };
+
+  const counts = await getStaffRecordCounts(userId);
+  if (!canHardDeleteStaff(counts)) {
+    return { error: STAFF_HAS_RECORDS_MSG };
   }
 
-  await admin.from("staff_branches").delete().eq("staff_id", userId);
-  await admin.from("staff").delete().eq("user_id", userId);
-  const { error } = await admin.auth.admin.deleteUser(userId);
-  if (error) return { error: "حُذفت بيانات الموظف لكن فشل حذف حساب الدخول" };
+  try {
+    const { error: brErr } = await admin
+      .from("staff_branches")
+      .delete()
+      .eq("staff_id", userId);
+    if (brErr) {
+      if (brErr.code === "23503") return { error: STAFF_HAS_RECORDS_MSG };
+      return { error: "فشل حذف ربط الفروع" };
+    }
+
+    const { error: staffErr } = await admin
+      .from("staff")
+      .delete()
+      .eq("user_id", userId);
+    if (staffErr) {
+      if (staffErr.code === "23503") return { error: STAFF_HAS_RECORDS_MSG };
+      return { error: "فشل حذف الموظف" };
+    }
+
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) {
+      return { error: "حُذفت بيانات الموظف لكن فشل حذف حساب الدخول" };
+    }
+  } catch {
+    return { error: STAFF_HAS_RECORDS_MSG };
+  }
 
   revalidatePath("/admin/staff");
   return { success: true };
@@ -426,7 +493,6 @@ export async function recordCashSettlementAction(
     .select("collected_amount")
     .eq("assigned_to", parsed.data.staffId)
     .eq("status", "delivered")
-    .is("deleted_at", null)
     .not("collected_amount", "is", null);
 
   const { data: settlements } = await admin

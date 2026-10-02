@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createServiceClient } from "@/supabase/admin";
 import { StaffManager } from "@/components/admin/StaffManager";
+import { staffHasRecords } from "@/lib/staff-guards";
 import type { Branch, Staff } from "@/types/database";
 
 export const metadata: Metadata = {
@@ -26,9 +27,37 @@ export default async function AdminStaffPage() {
     byStaff.set(link.staff_id, list);
   }
 
-  const initialStaff = ((staffRows ?? []) as Staff[]).map((s) => ({
+  const staffList = (staffRows ?? []) as Staff[];
+
+  const counts = await Promise.all(
+    staffList.map(async (s) => {
+      const [{ count: assignedOrderCount }, { count: settlementCount }] =
+        await Promise.all([
+          admin
+            .from("orders")
+            .select("*", { count: "exact", head: true })
+            .eq("assigned_to", s.user_id),
+          admin
+            .from("cash_settlements")
+            .select("*", { count: "exact", head: true })
+            .eq("staff_id", s.user_id),
+        ]);
+      return {
+        user_id: s.user_id,
+        has_records: staffHasRecords({
+          assignedOrderCount: assignedOrderCount ?? 0,
+          settlementCount: settlementCount ?? 0,
+        }),
+      };
+    })
+  );
+
+  const hasRecordsMap = new Map(counts.map((c) => [c.user_id, c.has_records]));
+
+  const initialStaff = staffList.map((s) => ({
     ...s,
     branch_ids: byStaff.get(s.user_id) ?? [],
+    has_records: hasRecordsMap.get(s.user_id) ?? false,
   }));
 
   return (

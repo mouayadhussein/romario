@@ -1,14 +1,17 @@
 /**
- * RLS smoke checks using the anon key only.
- * Expected: sensitive reads/writes fail; public menu reads succeed for active data.
- *
+ * RLS / auth smoke checks.
  * Usage: npm run rls-check
- * Requires NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY in env.
+ * Needs NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY.
+ * Optional SUPABASE_SERVICE_ROLE_KEY for elevated deny checks.
  */
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import {
+  STAFF_HAS_RECORDS_MSG,
+  canHardDeleteStaff,
+} from "../lib/staff-guards";
 
 function loadEnvFile(file: string) {
   const p = resolve(process.cwd(), file);
@@ -49,6 +52,7 @@ function env(name: string): string {
 async function main() {
   const url = env("NEXT_PUBLIC_SUPABASE_URL");
   const anon = env("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabase = createClient(url, anon, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -63,13 +67,18 @@ async function main() {
     const empty =
       data == null ||
       (Array.isArray(data) && data.length === 0) ||
-      (typeof data === "object" && data !== null && !Array.isArray(data) && Object.keys(data as object).length === 0);
+      (typeof data === "object" &&
+        data !== null &&
+        !Array.isArray(data) &&
+        Object.keys(data as object).length === 0);
     const denied = Boolean(error) || empty;
     results.push({
       name,
       expected: "deny",
       passed: denied,
-      detail: error?.message ?? (empty ? "empty/null (treated as deny)" : "unexpected data returned"),
+      detail:
+        error?.message ??
+        (empty ? "empty/null (treated as deny)" : "unexpected data returned"),
     });
   }
 
@@ -83,7 +92,9 @@ async function main() {
       name,
       expected: "allow",
       passed: ok,
-      detail: error?.message ?? (Array.isArray(data) ? `rows=${data.length}` : "ok"),
+      detail:
+        error?.message ??
+        (Array.isArray(data) ? `rows=${data.length}` : "ok"),
     });
   }
 
@@ -122,11 +133,113 @@ async function main() {
     return { error: res.error, data: res.data };
   });
 
-  await expectDeny("rpc claim_order", async () => {
+  await expectDeny("rpc claim_order (anon)", async () => {
     const res = await supabase.rpc("claim_order", {
       p_order_id: "00000000-0000-0000-0000-000000000000",
     });
     return { error: res.error, data: res.data };
+  });
+
+  if (serviceKey) {
+    const service = createClient(url, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    await expectDeny("rpc claim_order (service_role)", async () => {
+      const res = await service.rpc("claim_order", {
+        p_order_id: "00000000-0000-0000-0000-000000000000",
+      });
+      return { error: res.error, data: res.data };
+    });
+
+    const email = `rls-inactive-${Date.now()}@example.com`;
+    const password = `Tmp!${Date.now()}aA1`;
+    const { data: created, error: createErr } =
+      await service.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+
+    if (!createErr && created.user) {
+      const uid = created.user.id;
+      const { error: staffInsErr } = await service.from("staff").insert({
+        user_id: uid,
+        full_name: "RLS Inactive",
+        is_active: false,
+      });
+
+      if (staffInsErr) {
+        results.push({
+          name: "rpc claim_order (inactive staff)",
+          expected: "deny",
+          passed: false,
+          detail: staffInsErr.message,
+        });
+        await service.auth.admin.deleteUser(uid);
+      } else {
+        const staffClient = createClient(url, anon, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        const { error: signErr } = await staffClient.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (!signErr) {
+          await expectDeny("rpc claim_order (inactive staff)", async () => {
+            const res = await staffClient.rpc("claim_order", {
+              p_order_id: "00000000-0000-0000-0000-000000000000",
+            });
+            return { error: res.error, data: res.data };
+          });
+          await staffClient.auth.signOut();
+        } else {
+          results.push({
+            name: "rpc claim_order (inactive staff)",
+            expected: "deny",
+            passed: false,
+            detail: `sign-in failed: ${signErr.message}`,
+          });
+        }
+
+        await service.from("staff").delete().eq("user_id", uid);
+        await service.auth.admin.deleteUser(uid);
+      }
+    } else {
+      results.push({
+        name: "rpc claim_order (inactive staff)",
+        expected: "deny",
+        passed: false,
+        detail: createErr?.message ?? "could not create temp staff user",
+      });
+    }
+  } else {
+    results.push({
+      name: "rpc claim_order (service_role)",
+      expected: "deny",
+      passed: false,
+      detail: "SKIPPED — set SUPABASE_SERVICE_ROLE_KEY",
+    });
+    results.push({
+      name: "rpc claim_order (inactive staff)",
+      expected: "deny",
+      passed: false,
+      detail: "SKIPPED — set SUPABASE_SERVICE_ROLE_KEY",
+    });
+  }
+
+  const deleteBlocked = !canHardDeleteStaff({
+    assignedOrderCount: 1,
+    settlementCount: 0,
+  });
+  results.push({
+    name: "delete staff with records rejected (app rule)",
+    expected: "deny",
+    passed: deleteBlocked && STAFF_HAS_RECORDS_MSG.includes("تعطيله"),
+    detail: deleteBlocked
+      ? STAFF_HAS_RECORDS_MSG
+      : "canHardDeleteStaff unexpectedly allowed deletion",
   });
 
   await expectDeny("select branch_counters", async () => {
@@ -142,6 +255,7 @@ async function main() {
       customer_phone: "12345678",
       order_type: "pickup",
       total: 1,
+      subtotal: 1,
     });
     return { error: res.error, data: res.data };
   });
@@ -155,7 +269,10 @@ async function main() {
   });
 
   await expectDeny("delete categories", async () => {
-    const res = await supabase.from("categories").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    const res = await supabase
+      .from("categories")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
     return { error: res.error, data: res.data };
   });
 

@@ -18,6 +18,7 @@ import type { Branch, Staff } from "@/types/database";
 type StaffRow = Staff & {
   branch_ids: string[];
   email?: string | null;
+  has_records?: boolean;
 };
 
 export function StaffManager({
@@ -210,24 +211,52 @@ export function StaffManager({
                 >
                   كلمة سر جديدة
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    if (!confirm("حذف الموظف نهائياً؟")) return;
-                    const result = await deleteStaffAction(row.user_id);
-                    if (result.error) {
-                      toast.error(result.error);
-                      return;
-                    }
-                    setStaff((prev) =>
-                      prev.filter((s) => s.user_id !== row.user_id)
-                    );
-                    toast.success("تم الحذف");
-                  }}
-                >
-                  حذف
-                </Button>
+                {row.has_records ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!row.is_active}
+                    onClick={async () => {
+                      if (!row.is_active) return;
+                      const result = await setStaffActive(row.user_id, false);
+                      if (result.error) {
+                        toast.error(result.error);
+                        return;
+                      }
+                      setStaff((prev) =>
+                        prev.map((s) =>
+                          s.user_id === row.user_id
+                            ? { ...s, is_active: false }
+                            : s
+                        )
+                      );
+                      toast.success(
+                        "تم التعطيل — لا يمكن حذف موظف له سجل"
+                      );
+                    }}
+                  >
+                    تعطيل
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      if (!confirm("حذف الموظف نهائياً؟ لا يمكن التراجع.")) return;
+                      const result = await deleteStaffAction(row.user_id);
+                      if (result.error) {
+                        toast.error(result.error);
+                        return;
+                      }
+                      setStaff((prev) =>
+                        prev.filter((s) => s.user_id !== row.user_id)
+                      );
+                      toast.success("تم الحذف");
+                    }}
+                  >
+                    حذف
+                  </Button>
+                )}
               </div>
             </li>
           ))}

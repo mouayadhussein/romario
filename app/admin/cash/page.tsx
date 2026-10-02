@@ -25,7 +25,6 @@ export default async function AdminCashPage() {
           .select("collected_amount")
           .eq("assigned_to", s.user_id)
           .eq("status", "delivered")
-          .is("deleted_at", null)
           .not("collected_amount", "is", null),
         admin
           .from("cash_settlements")

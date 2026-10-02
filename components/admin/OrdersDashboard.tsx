@@ -190,7 +190,19 @@ export function OrdersDashboard({
 
   async function handleSoftDelete() {
     if (!selected) return;
-    if (!confirm("نقل الطلب إلى سلة المحذوفات؟")) return;
+    const collected =
+      selected.collected_amount != null
+        ? Number(selected.collected_amount)
+        : null;
+    const hasCash =
+      selected.status === "delivered" &&
+      collected != null &&
+      Number.isFinite(collected) &&
+      collected > 0;
+    const msg = hasCash
+      ? `تحذير: هذا الطلب موصّل وعليه مبلغ محصّل (${collected}). سيبقى المبلغ ضمن رصيد الموظف بعد النقل لسلة المحذوفات. هل تريد المتابعة؟`
+      : "نقل الطلب إلى سلة المحذوفات؟";
+    if (!confirm(msg)) return;
     setUpdating(true);
     const result = await softDeleteOrder(selected.id);
     setUpdating(false);
@@ -199,7 +211,11 @@ export function OrdersDashboard({
       return;
     }
     setOrders((prev) => prev.filter((o) => o.id !== selected.id));
-    toast.success("تم الحذف");
+    toast.success(
+      hasCash
+        ? "تم الحذف مع الإبقاء على المبلغ في رصيد الموظف"
+        : "تم الحذف"
+    );
   }
 
   async function handleMarkReady() {

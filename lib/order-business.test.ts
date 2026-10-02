@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { calculateOrderFees } from "@/lib/order-fees";
 import { canAdminTransition } from "@/lib/order-status";
 import { calculateStaffCashBalance } from "@/lib/staff-cash";
+import {
+  STAFF_HAS_RECORDS_MSG,
+  canHardDeleteStaff,
+  staffHasRecords,
+} from "@/lib/staff-guards";
 
 describe("calculateOrderFees", () => {
   it("applies delivery fee only for delivery", () => {
@@ -70,5 +75,23 @@ describe("calculateStaffCashBalance", () => {
         settlementAmounts: [80],
       })
     ).toBe(70);
+  });
+});
+
+describe("staff deletion guards", () => {
+  it("blocks hard delete when staff has assigned orders or settlements", () => {
+    expect(
+      canHardDeleteStaff({ assignedOrderCount: 1, settlementCount: 0 })
+    ).toBe(false);
+    expect(
+      canHardDeleteStaff({ assignedOrderCount: 0, settlementCount: 2 })
+    ).toBe(false);
+    expect(
+      canHardDeleteStaff({ assignedOrderCount: 0, settlementCount: 0 })
+    ).toBe(true);
+    expect(staffHasRecords({ assignedOrderCount: 1, settlementCount: 0 })).toBe(
+      true
+    );
+    expect(STAFF_HAS_RECORDS_MSG).toMatch(/تعطيله/);
   });
 });

@@ -1,5 +1,11 @@
 "use server";
 
+/**
+ * Staff order mutations MUST use the session-bound Supabase client from
+ * requireStaff() so Postgres SECURITY DEFINER RPCs see auth.uid().
+ * Never call claim/deliver/release via the service-role client.
+ */
+
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth-guards";
 import { deliverOrderSchema } from "@/lib/validations";
@@ -73,7 +79,6 @@ export async function getStaffCashBalanceAction(): Promise<{
     .select("collected_amount")
     .eq("assigned_to", userId)
     .eq("status", "delivered")
-    .is("deleted_at", null)
     .not("collected_amount", "is", null);
 
   const { data: settlements } = await admin
