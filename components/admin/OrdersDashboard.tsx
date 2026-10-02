@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Printer, Bell } from "lucide-react";
+import { Printer, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/supabase/client";
 import {
@@ -11,6 +11,12 @@ import {
   markOrderReady,
   assignOrderStaff,
 } from "@/lib/order-actions";
+import {
+  OPEN_ORDER_EVENT,
+  ORDER_FULL_SELECT,
+  subscribeOrdersRealtime,
+  type OrdersRealtimeStatus,
+} from "@/lib/orders-realtime";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -60,7 +66,7 @@ export function OrdersDashboard({
   eventsByOrder?: Record<string, OrderEvent[]>;
 }) {
   const [orders, setOrders] = useState(initialOrders);
-  const [eventsMap] = useState(eventsByOrder);
+  const [eventsMap, setEventsMap] = useState(eventsByOrder);
   const [branchFilter, setBranchFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -71,90 +77,117 @@ export function OrdersDashboard({
   const [cancelReason, setCancelReason] =
     useState<CancelReasonCode>("customer_cancelled");
   const [cancelText, setCancelText] = useState("");
+  const [rtStatus, setRtStatus] = useState<OrdersRealtimeStatus>("connecting");
   const knownIds = useRef(new Set(initialOrders.map((o) => o.id)));
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const selectedIdRef = useRef(selectedId);
 
-  const playAlert = useCallback(() => {
-    try {
-      if (!audioRef.current) {
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.value = 0.15;
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      }
-    } catch {
-      // ignore audio errors
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const refreshEvents = useCallback(async (orderId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("order_events")
+      .select("*")
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (data) {
+      setEventsMap((prev) => ({
+        ...prev,
+        [orderId]: data as OrderEvent[],
+      }));
     }
   }, []);
 
+  const refetchOrders = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("orders")
+      .select(ORDER_FULL_SELECT)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (data) {
+      const list = data as unknown as OrderWithItems[];
+      setOrders(list);
+      for (const o of list) knownIds.current.add(o.id);
+    }
+    const sid = selectedIdRef.current;
+    if (sid) void refreshEvents(sid);
+  }, [refreshEvents]);
+
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ orderId: string }>).detail;
+      if (detail?.orderId) {
+        setSelectedId(detail.orderId);
+        setStatusFilter("all");
+        setBranchFilter("all");
+        void refreshEvents(detail.orderId);
+      }
+    };
+    window.addEventListener(OPEN_ORDER_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_ORDER_EVENT, onOpen);
+  }, [refreshEvents]);
+
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel("admin-orders")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        async (payload) => {
-          if (payload.eventType === "INSERT") {
-            const newRow = payload.new as OrderWithItems;
-            const { data: full } = await supabase
-              .from("orders")
-              .select(
-                "*, order_items(*), branches(id, name, slug, whatsapp_number)"
-              )
-              .eq("id", newRow.id)
-              .is("deleted_at", null)
-              .single();
-
-            if (full) {
-              const order = full as unknown as OrderWithItems;
-              setOrders((prev) => {
-                if (prev.some((o) => o.id === order.id)) return prev;
-                return [order, ...prev];
-              });
-              if (!knownIds.current.has(order.id)) {
-                knownIds.current.add(order.id);
-                playAlert();
-                toast.success(`طلب جديد: ${order.order_number}`, {
-                  icon: <Bell className="h-4 w-4" />,
-                  duration: 8000,
-                });
-              }
-            }
-          }
-
-          if (payload.eventType === "UPDATE") {
-            const updated = payload.new as OrderWithItems;
-            if (updated.deleted_at) {
-              setOrders((prev) => prev.filter((o) => o.id !== updated.id));
-              return;
-            }
-            setOrders((prev) =>
-              prev.map((o) =>
-                o.id === updated.id
-                  ? { ...o, ...updated, order_items: o.order_items }
-                  : o
-              )
-            );
-          }
-
-          if (payload.eventType === "DELETE") {
-            const old = payload.old as { id: string };
-            setOrders((prev) => prev.filter((o) => o.id !== old.id));
-          }
+    return subscribeOrdersRealtime({
+      onStatus: setRtStatus,
+      onRefetchNeeded: () => {
+        void refetchOrders();
+      },
+      onChange: async (change) => {
+        if (change.eventType === "DELETE") {
+          setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          return;
         }
-      )
-      .subscribe();
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [playAlert]);
+        if (change.row.deleted_at) {
+          setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          return;
+        }
+
+        const { data: full } = await supabase
+          .from("orders")
+          .select(ORDER_FULL_SELECT)
+          .eq("id", change.row.id)
+          .is("deleted_at", null)
+          .maybeSingle();
+
+        if (!full) {
+          setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          return;
+        }
+
+        const order = full as unknown as OrderWithItems;
+        setOrders((prev) => {
+          const idx = prev.findIndex((o) => o.id === order.id);
+          if (idx === -1) {
+            knownIds.current.add(order.id);
+            return [order, ...prev];
+          }
+          const next = [...prev];
+          next[idx] = {
+            ...next[idx],
+            ...order,
+            order_items: order.order_items?.length
+              ? order.order_items
+              : next[idx].order_items,
+            branches: order.branches ?? next[idx].branches,
+            staff: order.staff ?? next[idx].staff,
+          };
+          return next;
+        });
+
+        if (selectedIdRef.current === order.id) {
+          void refreshEvents(order.id);
+        }
+      },
+    });
+  }, [refetchOrders, refreshEvents]);
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
@@ -320,6 +353,12 @@ export function OrdersDashboard({
           onChange={(e) => setStatusFilter(e.target.value)}
           options={statusOptions}
         />
+        {rtStatus === "disconnected" && (
+          <span className="inline-flex items-center gap-1 self-center rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+            <WifiOff className="h-3 w-3" />
+            غير متصل
+          </span>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -331,7 +370,10 @@ export function OrdersDashboard({
               <li key={order.id}>
                 <button
                   type="button"
-                  onClick={() => setSelectedId(order.id)}
+                  onClick={() => {
+                    setSelectedId(order.id);
+                    void refreshEvents(order.id);
+                  }}
                   className={`w-full rounded-xl border p-3 text-right transition ${
                     selected?.id === order.id
                       ? "border-brand-500 bg-brand-50"

@@ -87,6 +87,25 @@ body {
   }
 }
 
+@keyframes bell-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(14deg);
+  }
+  40% {
+    transform: rotate(-12deg);
+  }
+  60% {
+    transform: rotate(8deg);
+  }
+  80% {
+    transform: rotate(-6deg);
+  }
+}
+
 .animate-hero-zoom {
   animation: hero-zoom 1.4s ease-out both;
 }
@@ -103,11 +122,16 @@ body {
   animation: dropdown-in 0.18s ease-out both;
 }
 
+.animate-bell-shake {
+  animation: bell-shake 0.55s ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-hero-zoom,
   .animate-hero-rise,
   .animate-section-rise,
-  .animate-dropdown-in {
+  .animate-dropdown-in,
+  .animate-bell-shake {
     animation: none;
   }
 }

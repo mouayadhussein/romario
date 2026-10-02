@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { createClient } from "@/supabase/client";
 import { recordCashSettlementAction } from "@/lib/order-actions";
 import { calculateStaffCashBalance } from "@/lib/staff-cash";
+import { subscribeOrdersRealtime } from "@/lib/orders-realtime";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -23,6 +25,49 @@ export function CashSettlementClient({ staff }: { staff: StaffCashRow[] }) {
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [localStaff, setLocalStaff] = useState(staff);
+
+  const refreshCollected = useCallback(async (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("orders")
+      .select("assigned_to, collected_amount")
+      .in("assigned_to", userIds)
+      .eq("status", "delivered")
+      .not("collected_amount", "is", null);
+
+    const byStaff = new Map<string, number[]>();
+    for (const row of data ?? []) {
+      if (!row.assigned_to || row.collected_amount == null) continue;
+      const list = byStaff.get(row.assigned_to) ?? [];
+      list.push(Number(row.collected_amount));
+      byStaff.set(row.assigned_to, list);
+    }
+
+    setLocalStaff((prev) =>
+      prev.map((s) => ({
+        ...s,
+        collected: byStaff.get(s.user_id) ?? [],
+      }))
+    );
+  }, []);
+
+  useEffect(() => {
+    const ids = localStaff.map((s) => s.user_id);
+    return subscribeOrdersRealtime({
+      onRefetchNeeded: () => {
+        void refreshCollected(ids);
+      },
+      onChange: (change) => {
+        if (change.eventType === "DELETE") return;
+        const row = change.row;
+        if (row.status === "delivered" && row.assigned_to) {
+          void refreshCollected(ids);
+        }
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshCollected]);
 
   const selected = useMemo(
     () => localStaff.find((s) => s.user_id === staffId) ?? null,

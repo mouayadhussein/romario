@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { staffLogoutAction } from "@/lib/staff-auth";
 import { config } from "@/lib/config";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function StaffShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,17 +22,20 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
             <p className="text-sm font-bold text-brand-700">{config.appName}</p>
             <p className="text-xs text-stone-500">تطبيق التوصيل</p>
           </div>
-          <button
-            type="button"
-            className="rounded-lg px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50"
-            onClick={async () => {
-              await staffLogoutAction();
-              router.push("/staff/login");
-              router.refresh();
-            }}
-          >
-            خروج
-          </button>
+          <div className="flex items-center gap-1">
+            <NotificationBell role="staff" />
+            <button
+              type="button"
+              className="rounded-lg px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-50"
+              onClick={async () => {
+                await staffLogoutAction();
+                router.push("/staff/login");
+                router.refresh();
+              }}
+            >
+              خروج
+            </button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-lg px-3 py-4 pb-10">{children}</main>

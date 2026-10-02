@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Phone, Navigation, Package } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Phone, Navigation, Package, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/supabase/client";
 import {
@@ -9,6 +9,11 @@ import {
   staffDeliverOrder,
   staffReleaseOrder,
 } from "@/lib/staff-actions";
+import {
+  ORDER_FULL_SELECT,
+  subscribeOrdersRealtime,
+  type OrdersRealtimeStatus,
+} from "@/lib/orders-realtime";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -43,8 +48,22 @@ export function StaffOrdersClient({
   const [collectedAmount, setCollectedAmount] = useState("");
   const [deliverNote, setDeliverNote] = useState("");
   const [delivering, setDelivering] = useState(false);
+  const [rtStatus, setRtStatus] = useState<OrdersRealtimeStatus>("connecting");
 
   const branchSet = useMemo(() => new Set(branchIds), [branchIds]);
+  const staffIdRef = useRef(staffId);
+  const branchIdsRef = useRef(branchIds);
+  const deliverOrderIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    staffIdRef.current = staffId;
+  }, [staffId]);
+  useEffect(() => {
+    branchIdsRef.current = branchIds;
+  }, [branchIds]);
+  useEffect(() => {
+    deliverOrderIdRef.current = deliverOrder?.id ?? null;
+  }, [deliverOrder?.id]);
 
   const startOfDayIso = useMemo(() => {
     const d = new Date();
@@ -101,47 +120,111 @@ export function StaffOrdersClient({
         if (bucket === "delivered") return [order, ...without];
         return without;
       });
+
+      if (
+        deliverOrderIdRef.current === order.id &&
+        (order.assigned_to !== staffIdRef.current ||
+          order.status === "cancelled" ||
+          order.deleted_at)
+      ) {
+        setDeliverOrder(null);
+      }
     },
     [classify]
   );
 
+  const removeOrder = useCallback((id: string) => {
+    setAvailable((p) => p.filter((o) => o.id !== id));
+    setMine((p) => p.filter((o) => o.id !== id));
+    setDelivered((p) => p.filter((o) => o.id !== id));
+    if (deliverOrderIdRef.current === id) setDeliverOrder(null);
+  }, []);
+
+  const refetchLists = useCallback(async () => {
+    const ids = branchIdsRef.current;
+    if (ids.length === 0) {
+      setAvailable([]);
+      setMine([]);
+      setDelivered([]);
+      return;
+    }
+    const supabase = createClient();
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const sid = staffIdRef.current;
+
+    const [{ data: avail }, { data: my }, { data: del }] = await Promise.all([
+      supabase
+        .from("orders")
+        .select(ORDER_FULL_SELECT)
+        .eq("status", "ready")
+        .eq("order_type", "delivery")
+        .is("assigned_to", null)
+        .is("deleted_at", null)
+        .in("branch_id", ids)
+        .order("created_at", { ascending: true })
+        .limit(50),
+      supabase
+        .from("orders")
+        .select(ORDER_FULL_SELECT)
+        .eq("status", "on_the_way")
+        .eq("assigned_to", sid)
+        .is("deleted_at", null)
+        .order("claimed_at", { ascending: true })
+        .limit(50),
+      supabase
+        .from("orders")
+        .select(ORDER_FULL_SELECT)
+        .eq("status", "delivered")
+        .eq("assigned_to", sid)
+        .is("deleted_at", null)
+        .gte("delivered_at", start.toISOString())
+        .order("delivered_at", { ascending: false })
+        .limit(50),
+    ]);
+
+    setAvailable((avail ?? []) as unknown as OrderWithItems[]);
+    setMine((my ?? []) as unknown as OrderWithItems[]);
+    setDelivered((del ?? []) as unknown as OrderWithItems[]);
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel("staff-orders")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders" },
-        async (payload) => {
-          if (payload.eventType === "DELETE") {
-            const old = payload.old as { id: string };
-            setAvailable((p) => p.filter((o) => o.id !== old.id));
-            setMine((p) => p.filter((o) => o.id !== old.id));
-            setDelivered((p) => p.filter((o) => o.id !== old.id));
-            return;
-          }
-
-          const row = payload.new as OrderWithItems;
-          if (!branchSet.has(row.branch_id)) return;
-
-          const { data: full } = await supabase
-            .from("orders")
-            .select(
-              "*, order_items(*), branches(id, name, slug, whatsapp_number)"
-            )
-            .eq("id", row.id)
-            .maybeSingle();
-
-          if (full) upsertOrder(full as unknown as OrderWithItems);
-          else upsertOrder(row);
+    return subscribeOrdersRealtime({
+      onStatus: setRtStatus,
+      onRefetchNeeded: () => {
+        void refetchLists();
+      },
+      onChange: async (change) => {
+        if (change.eventType === "DELETE") {
+          removeOrder(change.row.id);
+          return;
         }
-      )
-      .subscribe();
 
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [branchSet, upsertOrder]);
+        const row = change.row;
+        if (
+          row.branch_id &&
+          !branchIdsRef.current.includes(String(row.branch_id))
+        ) {
+          removeOrder(row.id);
+          return;
+        }
+
+        const { data: full } = await supabase
+          .from("orders")
+          .select(ORDER_FULL_SELECT)
+          .eq("id", row.id)
+          .maybeSingle();
+
+        if (!full) {
+          // Soft-deleted or out of RLS — drop from lists
+          removeOrder(row.id);
+          return;
+        }
+        upsertOrder(full as unknown as OrderWithItems);
+      },
+    });
+  }, [refetchLists, removeOrder, upsertOrder]);
 
   async function claim(orderId: string) {
     setBusyId(orderId);
@@ -149,6 +232,7 @@ export function StaffOrdersClient({
     setBusyId(null);
     if (result.error) {
       toast.error(result.error);
+      void refetchLists();
       return;
     }
     toast.success("تم استلام الطلب");
@@ -203,7 +287,15 @@ export function StaffOrdersClient({
 
   return (
     <div className="space-y-4" dir="rtl">
-      <h1 className="text-xl font-bold text-stone-900">طلبات التوصيل</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-bold text-stone-900">طلبات التوصيل</h1>
+        {rtStatus === "disconnected" && (
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+            <WifiOff className="h-3 w-3" />
+            غير متصل
+          </span>
+        )}
+      </div>
 
       <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm">
         {tabs.map((t) => (

@@ -14,6 +14,7 @@ import {
 import { logoutAction } from "@/lib/admin-actions";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const links = [
   { href: "/admin", label: "الطلبات", icon: LayoutDashboard },
@@ -30,8 +31,9 @@ export function AdminSidebar() {
 
   return (
     <aside className="no-print flex w-full flex-col border-b border-stone-200 bg-white md:w-56 md:border-b-0 md:border-l">
-      <div className="border-b border-stone-200 px-4 py-4">
+      <div className="flex items-center justify-between gap-2 border-b border-stone-200 px-4 py-4">
         <p className="text-sm font-bold text-brand-700">لوحة التحكم</p>
+        <NotificationBell role="admin" />
       </div>
       <nav className="flex gap-1 overflow-x-auto p-2 md:flex-col">
         {links.map((link) => {
