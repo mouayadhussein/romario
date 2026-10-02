@@ -114,7 +114,20 @@ async function main() {
   });
 
   await expectDeny("select staff", async () => {
-    const res = await supabase.from("staff").select("user_id").limit(5);
+    const res = await supabase.from("staff").select("user_id, full_name, phone").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select staff phone/name only", async () => {
+    const res = await supabase.from("staff").select("full_name, phone").limit(5);
+    return { error: res.error, data: res.data };
+  });
+
+  await expectDeny("select orders sensitive cols", async () => {
+    const res = await supabase
+      .from("orders")
+      .select("id, customer_phone, customer_address, assigned_to, tracking_token")
+      .limit(5);
     return { error: res.error, data: res.data };
   });
 

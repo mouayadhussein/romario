@@ -1,22 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Phone } from "lucide-react";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { formatDateTimeAr, formatPrice } from "@/lib/utils";
-import type { OrderStatus, OrderType } from "@/types/database";
-
-type TrackingPayload = {
-  orderNumber: string;
-  status: OrderStatus;
-  statusLabel: string;
-  orderType: OrderType;
-  subtotal: number;
-  deliveryFee: number;
-  total: number;
-  createdAt: string;
-  branchName: string;
-  expired: boolean;
-};
+import { normalizeWhatsappNumber } from "@/lib/whatsapp";
+import type { PublicTrackingPayload } from "@/lib/order-lookup";
+import type { OrderType } from "@/types/database";
 
 const orderTypeLabels: Record<OrderType, string> = {
   delivery: "توصيل",
@@ -29,7 +19,7 @@ export function OrderTrackingClient({
   initial,
 }: {
   token: string;
-  initial: TrackingPayload;
+  initial: PublicTrackingPayload;
 }) {
   const [data, setData] = useState(initial);
 
@@ -42,7 +32,9 @@ export function OrderTrackingClient({
           cache: "no-store",
         });
         if (!res.ok) return;
-        const json = (await res.json()) as TrackingPayload & { error?: string };
+        const json = (await res.json()) as PublicTrackingPayload & {
+          error?: string;
+        };
         if (!cancelled && !json.error) setData(json);
       } catch {
         // ignore transient network errors
@@ -67,6 +59,14 @@ export function OrderTrackingClient({
     );
   }
 
+  const courier =
+    data.status === "on_the_way" && data.courier?.name
+      ? data.courier
+      : null;
+  const waDigits = courier?.phone
+    ? normalizeWhatsappNumber(courier.phone)
+    : null;
+
   return (
     <main className="mx-auto max-w-md px-4 py-10" dir="rtl">
       <p className="text-sm text-stone-500">{data.branchName}</p>
@@ -78,6 +78,37 @@ export function OrderTrackingClient({
         <StatusBadge status={data.status} />
       </div>
       <p className="mt-2 text-sm text-stone-600">{data.statusLabel}</p>
+
+      {courier && (
+        <section className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 shadow-sm">
+          <h2 className="text-sm font-bold text-brand-900">موظف التوصيل</h2>
+          <p className="mt-2 text-base font-semibold text-stone-900">
+            {courier.name}
+          </p>
+          {courier.phone && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href={`tel:${courier.phone}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-stone-800 shadow-sm ring-1 ring-stone-200"
+              >
+                <Phone className="h-4 w-4" />
+                اتصال
+              </a>
+              {waDigits && (
+                <a
+                  href={`https://wa.me/${waDigits}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+                >
+                  واتساب
+                </a>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="mt-6 space-y-2 rounded-2xl border border-stone-200 bg-white p-4 text-sm shadow-sm">
         <p>
           <strong>النوع:</strong> {orderTypeLabels[data.orderType]}

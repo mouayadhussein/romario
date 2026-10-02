@@ -305,6 +305,9 @@ export function StaffManager({
             value={form.phone}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
           />
+          <p className="-mt-1 text-xs text-stone-500">
+            هذا الرقم سيظهر للزبون أثناء توصيل طلبه فقط
+          </p>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-stone-800">
               الفروع

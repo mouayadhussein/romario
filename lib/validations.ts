@@ -390,3 +390,20 @@ export const deliverOrderSchema = z
       });
     }
   });
+
+export const orderLookupSchema = z
+  .object({
+    orderNumber: z
+      .string({ error: "رقم الطلب مطلوب" })
+      .trim()
+      .min(1, "رقم الطلب مطلوب")
+      .max(32, "رقم الطلب طويل جداً"),
+    phone: z
+      .string({ error: "رقم الهاتف مطلوب" })
+      .trim()
+      .min(8, "رقم الهاتف غير صالح")
+      .max(20, "رقم الهاتف طويل جداً"),
+  })
+  .strict();
+
+export type OrderLookupInput = z.infer<typeof orderLookupSchema>;

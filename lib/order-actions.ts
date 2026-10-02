@@ -67,9 +67,6 @@ export async function updateOrderStatus(
     status: OrderStatus;
     delivered_at?: string;
   } = { status: to };
-  if (to === "ready") {
-    /* ready for claim */
-  }
   if (to === "on_the_way" && !order.assigned_to) {
     return { error: "عيّن موظفاً أو اترك الطلب جاهزاً ليستلمه موظف" };
   }
@@ -91,10 +88,6 @@ export async function updateOrderStatus(
 
   revalidatePath("/admin");
   return { success: true };
-}
-
-export async function markOrderReady(orderId: string): Promise<ActionResult> {
-  return updateOrderStatus(orderId, "ready");
 }
 
 export async function cancelOrderAction(input: unknown): Promise<ActionResult> {

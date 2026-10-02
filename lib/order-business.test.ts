@@ -61,6 +61,7 @@ describe("canAdminTransition", () => {
   it("allows known paths and blocks illegal jumps", () => {
     expect(canAdminTransition("new", "preparing")).toBe(true);
     expect(canAdminTransition("preparing", "ready")).toBe(true);
+    expect(canAdminTransition("new", "ready")).toBe(true);
     expect(canAdminTransition("ready", "on_the_way")).toBe(true);
     expect(canAdminTransition("new", "delivered")).toBe(false);
     expect(canAdminTransition("delivered", "new")).toBe(false);

@@ -20,7 +20,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 /** Admin-allowed manual transitions (staff uses claim/deliver/release RPCs). */
 const ADMIN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  new: ["preparing", "cancelled"],
+  new: ["preparing", "ready", "cancelled"],
   preparing: ["ready", "cancelled"],
   ready: ["on_the_way", "preparing", "cancelled"],
   on_the_way: ["delivered", "ready", "cancelled"],

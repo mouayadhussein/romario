@@ -3,6 +3,7 @@ import { HomeHero } from "@/components/site/HomeHero";
 import { HomeHeader } from "@/components/site/HomeHeader";
 import { HomeCategories } from "@/components/site/HomeCategories";
 import { HomeLocations } from "@/components/site/HomeLocations";
+import { HomeOrderTrack } from "@/components/site/HomeOrderTrack";
 import { HomeFooter } from "@/components/site/HomeFooter";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getBranchStatus } from "@/lib/opening-hours";
@@ -137,6 +138,8 @@ export default async function HomePage() {
       />
 
       <HomeHero />
+
+      <HomeOrderTrack />
 
       <HomeCategories categories={uniqueCats} />
 

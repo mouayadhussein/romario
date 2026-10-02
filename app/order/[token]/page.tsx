@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { createServiceClient } from "@/supabase/admin";
 import { OrderTrackingClient } from "@/components/site/OrderTrackingClient";
 import { ORDER_STATUS_LABELS } from "@/lib/order-status";
+import {
+  buildPublicTrackingPayload,
+  isTrackingExpired,
+  type PublicTrackingPayload,
+} from "@/lib/order-lookup";
 import type { OrderStatus, OrderType } from "@/types/database";
 
 export const metadata: Metadata = {
@@ -14,14 +19,6 @@ export const dynamic = "force-dynamic";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isExpired(status: OrderStatus, deliveredAt: string | null, cancelledAt: string | null) {
-  if (status !== "delivered" && status !== "cancelled") return false;
-  const end = deliveredAt ?? cancelledAt;
-  if (!end) return false;
-  const ms = Date.now() - new Date(end).getTime();
-  return ms > 7 * 24 * 60 * 60 * 1000;
-}
 
 export default async function OrderTrackingPage({
   params,
@@ -35,7 +32,7 @@ export default async function OrderTrackingPage({
   const { data: order } = await admin
     .from("orders")
     .select(
-      "order_number, status, order_type, subtotal, delivery_fee, total, created_at, delivered_at, cancelled_at, deleted_at, branches(name)"
+      "order_number, status, order_type, subtotal, delivery_fee, total, created_at, delivered_at, cancelled_at, deleted_at, assigned_to, branches(name)"
     )
     .eq("tracking_token", token)
     .maybeSingle();
@@ -43,7 +40,13 @@ export default async function OrderTrackingPage({
   if (!order || order.deleted_at) notFound();
 
   const status = order.status as OrderStatus;
-  if (isExpired(status, order.delivered_at, order.cancelled_at)) {
+  if (
+    isTrackingExpired({
+      status,
+      deliveredAt: order.delivered_at,
+      cancelledAt: order.cancelled_at,
+    })
+  ) {
     return (
       <main className="mx-auto max-w-md px-4 py-16 text-center" dir="rtl">
         <h1 className="text-xl font-bold text-stone-900">انتهت صلاحية التتبع</h1>
@@ -57,21 +60,31 @@ export default async function OrderTrackingPage({
   const branchName =
     (order.branches as { name: string } | null)?.name ?? "المطعم";
 
-  return (
-    <OrderTrackingClient
-      token={token}
-      initial={{
-        orderNumber: order.order_number,
-        status,
-        statusLabel: ORDER_STATUS_LABELS[status] ?? status,
-        orderType: order.order_type as OrderType,
-        subtotal: Number(order.subtotal ?? order.total),
-        deliveryFee: Number(order.delivery_fee ?? 0),
-        total: Number(order.total),
-        createdAt: order.created_at,
-        branchName,
-        expired: false,
-      }}
-    />
-  );
+  let courier: { full_name: string; phone: string | null } | null = null;
+  if (status === "on_the_way" && order.assigned_to) {
+    const { data: staff } = await admin
+      .from("staff")
+      .select("full_name, phone")
+      .eq("user_id", order.assigned_to)
+      .maybeSingle();
+    if (staff?.full_name) {
+      courier = { full_name: staff.full_name, phone: staff.phone };
+    }
+  }
+
+  const initial: PublicTrackingPayload = buildPublicTrackingPayload({
+    orderNumber: order.order_number,
+    status,
+    statusLabel: ORDER_STATUS_LABELS[status] ?? status,
+    orderType: order.order_type as OrderType,
+    subtotal: Number(order.subtotal ?? order.total),
+    deliveryFee: Number(order.delivery_fee ?? 0),
+    total: Number(order.total),
+    createdAt: order.created_at,
+    branchName,
+    expired: false,
+    courier,
+  });
+
+  return <OrderTrackingClient token={token} initial={initial} />;
 }

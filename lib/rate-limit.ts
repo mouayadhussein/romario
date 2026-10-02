@@ -114,6 +114,17 @@ export async function checkOrderPhoneRateLimit(phone: string) {
   return checkRateLimit(`orders:phone:${normalized}`, 5, 60 * 60_000);
 }
 
+/** Order lookup: 10 attempts / 10 minutes per IP. */
+export async function checkLookupIpRateLimit(ip: string) {
+  return checkRateLimit(`lookup:ip:${ip}`, 10, 10 * 60_000);
+}
+
+/** Order lookup: 5 attempts / hour per phone (digits). */
+export async function checkLookupPhoneRateLimit(phoneDigits: string) {
+  const normalized = phoneDigits.replace(/\D/g, "");
+  return checkRateLimit(`lookup:phone:${normalized}`, 5, 60 * 60_000);
+}
+
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
     const now = Date.now();

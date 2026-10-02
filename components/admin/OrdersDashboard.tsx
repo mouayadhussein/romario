@@ -8,7 +8,6 @@ import {
   updateOrderStatus,
   softDeleteOrder,
   cancelOrderAction,
-  markOrderReady,
   assignOrderStaff,
 } from "@/lib/order-actions";
 import {
@@ -251,23 +250,6 @@ export function OrdersDashboard({
     );
   }
 
-  async function handleMarkReady() {
-    if (!selected) return;
-    setUpdating(true);
-    const result = await markOrderReady(selected.id);
-    setUpdating(false);
-    if (result.error) {
-      toast.error(result.error);
-      return;
-    }
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === selected.id ? { ...o, status: "ready" as const } : o
-      )
-    );
-    toast.success("الطلب جاهز للتوصيل");
-  }
-
   async function handleAssign(staffId: string) {
     if (!selected) return;
     setUpdating(true);
@@ -416,16 +398,6 @@ export function OrdersDashboard({
                   options={statusOptions.filter((o) => o.value !== "all")}
                 />
                 <div className="flex flex-wrap items-end gap-2">
-                  {(selected.status === "new" ||
-                    selected.status === "preparing") && (
-                    <Button
-                      variant="outline"
-                      disabled={updating}
-                      onClick={() => void handleMarkReady()}
-                    >
-                      جاهز للتوصيل
-                    </Button>
-                  )}
                   <Button
                     variant="outline"
                     disabled={updating}
