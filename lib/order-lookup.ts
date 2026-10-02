@@ -5,7 +5,7 @@
 import type { OrderStatus, OrderType } from "@/types/database";
 
 export const ORDER_LOOKUP_FAIL_MESSAGE =
-  "لم نعثر على طلب بهذه البيانات. تأكد من الرقم وهاتفك";
+  "لم نعثر على طلب بهذا الرقم. تأكد من رقم الطلب";
 
 const TRACKING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 

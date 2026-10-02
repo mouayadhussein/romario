@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/supabase/admin";
 import { orderLookupSchema } from "@/lib/validations";
-import {
-  checkLookupIpRateLimit,
-  checkLookupPhoneRateLimit,
-} from "@/lib/rate-limit";
+import { checkLookupIpRateLimit } from "@/lib/rate-limit";
 import {
   assertAllowedOrigin,
   assertBodySize,
@@ -14,8 +11,6 @@ import {
   ORDER_LOOKUP_FAIL_MESSAGE,
   isTrackingExpired,
   normalizeOrderNumber,
-  normalizePhoneDigits,
-  phonesMatch,
   pickLatestOrder,
 } from "@/lib/order-lookup";
 import { logger } from "@/lib/logger";
@@ -58,8 +53,7 @@ export async function POST(request: NextRequest) {
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
-          error:
-            "محاولات كثيرة جداً. انتظر قليلاً ثم أعد المحاولة.",
+          error: "محاولات كثيرة جداً. انتظر قليلاً ثم أعد المحاولة.",
         },
         { status: 429 }
       );
@@ -77,22 +71,6 @@ export async function POST(request: NextRequest) {
       return failResponse(startedAt);
     }
 
-    const phoneDigits = normalizePhoneDigits(parsed.data.phone);
-    if (phoneDigits.length < 9) {
-      return failResponse(startedAt);
-    }
-
-    const phoneLimit = await checkLookupPhoneRateLimit(phoneDigits);
-    if (!phoneLimit.allowed) {
-      return NextResponse.json(
-        {
-          error:
-            "محاولات كثيرة لهذا الرقم. حاول لاحقاً.",
-        },
-        { status: 429 }
-      );
-    }
-
     const orderNumber = normalizeOrderNumber(parsed.data.orderNumber);
     if (!orderNumber) {
       return failResponse(startedAt);
@@ -102,7 +80,7 @@ export async function POST(request: NextRequest) {
     const { data: rows, error } = await admin
       .from("orders")
       .select(
-        "id, order_number, customer_phone, tracking_token, status, delivered_at, cancelled_at, deleted_at, created_at"
+        "id, order_number, tracking_token, status, delivered_at, cancelled_at, deleted_at, created_at"
       )
       .eq("order_number", orderNumber)
       .is("deleted_at", null)
@@ -110,14 +88,13 @@ export async function POST(request: NextRequest) {
       .limit(20);
 
     if (error) {
-      logger.error("order_lookup.query_failed", { code: error.code ?? "unknown" });
+      logger.error("order_lookup.query_failed", {
+        code: error.code ?? "unknown",
+      });
       return failResponse(startedAt);
     }
 
-    const matched = (rows ?? []).filter((row) =>
-      phonesMatch(row.customer_phone, parsed.data.phone)
-    );
-    const order = pickLatestOrder(matched);
+    const order = pickLatestOrder(rows ?? []);
 
     if (!order?.tracking_token) {
       return failResponse(startedAt);

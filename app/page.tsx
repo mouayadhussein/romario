@@ -139,8 +139,6 @@ export default async function HomePage() {
 
       <HomeHero />
 
-      <HomeOrderTrack />
-
       <HomeCategories categories={uniqueCats} />
 
       {error ? (
@@ -154,6 +152,8 @@ export default async function HomePage() {
       ) : (
         <HomeLocations branches={branches} />
       )}
+
+      <HomeOrderTrack />
 
       <HomeFooter branches={branches} />
     </div>

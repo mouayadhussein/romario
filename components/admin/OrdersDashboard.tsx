@@ -492,6 +492,33 @@ export function OrdersDashboard({
                     <strong>ملاحظة عامة:</strong> {selected.general_note}
                   </p>
                 )}
+                {selected.status === "delivered" &&
+                  selected.collected_amount != null && (
+                    <p className="text-emerald-800">
+                      <strong>المبلغ المحصّل:</strong>{" "}
+                      {formatPrice(Number(selected.collected_amount))}
+                    </p>
+                  )}
+                {(() => {
+                  const deliveryEv = selectedEvents.find(
+                    (ev) =>
+                      ev.event === "delivered" &&
+                      ev.meta &&
+                      typeof ev.meta === "object" &&
+                      ev.meta.note
+                  );
+                  const note =
+                    deliveryEv &&
+                    typeof deliveryEv.meta.note === "string"
+                      ? deliveryEv.meta.note
+                      : null;
+                  if (!note) return null;
+                  return (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-950">
+                      <strong>ملاحظة التسليم:</strong> {note}
+                    </p>
+                  );
+                })()}
                 {selected.cancel_reason && (
                   <p className="text-red-700">
                     <strong>سبب الإلغاء:</strong> {selected.cancel_reason}
@@ -544,15 +571,39 @@ export function OrdersDashboard({
               {selectedEvents.length > 0 && (
                 <section className="no-print mt-4">
                   <h3 className="mb-2 font-semibold">الخط الزمني</h3>
-                  <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-stone-600">
-                    {selectedEvents.map((ev) => (
-                      <li key={ev.id}>
-                        {formatDateTimeAr(ev.created_at)} — {ev.event}
-                        {ev.to_status
-                          ? ` → ${ORDER_STATUS_LABELS[ev.to_status as OrderStatus] ?? ev.to_status}`
-                          : ""}
-                      </li>
-                    ))}
+                  <ul className="max-h-48 space-y-2 overflow-y-auto text-xs text-stone-600">
+                    {selectedEvents.map((ev) => {
+                      const meta =
+                        ev.meta && typeof ev.meta === "object"
+                          ? (ev.meta as Record<string, unknown>)
+                          : null;
+                      const note =
+                        typeof meta?.note === "string" ? meta.note : null;
+                      const collected =
+                        typeof meta?.collected_amount === "number"
+                          ? meta.collected_amount
+                          : null;
+                      return (
+                        <li key={ev.id} className="border-b border-stone-100 pb-1.5 last:border-0">
+                          <div>
+                            {formatDateTimeAr(ev.created_at)} — {ev.event}
+                            {ev.to_status
+                              ? ` → ${ORDER_STATUS_LABELS[ev.to_status as OrderStatus] ?? ev.to_status}`
+                              : ""}
+                          </div>
+                          {collected != null && (
+                            <div className="mt-0.5 text-emerald-700">
+                              محصّل: {formatPrice(collected)}
+                            </div>
+                          )}
+                          {note && (
+                            <div className="mt-0.5 text-amber-900">
+                              ملاحظة: {note}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </section>
               )}

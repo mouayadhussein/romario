@@ -55,6 +55,7 @@ describe("pickLatestOrder", () => {
 describe("ORDER_LOOKUP_FAIL_MESSAGE", () => {
   it("is a single stable Arabic message", () => {
     expect(ORDER_LOOKUP_FAIL_MESSAGE).toContain("لم نعثر");
+    expect(ORDER_LOOKUP_FAIL_MESSAGE).toContain("رقم الطلب");
   });
 });
 

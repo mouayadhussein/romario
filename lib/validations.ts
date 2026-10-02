@@ -398,11 +398,6 @@ export const orderLookupSchema = z
       .trim()
       .min(1, "رقم الطلب مطلوب")
       .max(32, "رقم الطلب طويل جداً"),
-    phone: z
-      .string({ error: "رقم الهاتف مطلوب" })
-      .trim()
-      .min(8, "رقم الهاتف غير صالح")
-      .max(20, "رقم الهاتف طويل جداً"),
   })
   .strict();
 

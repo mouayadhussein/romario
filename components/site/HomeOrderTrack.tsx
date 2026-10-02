@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PackageSearch } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { ORDER_LOOKUP_FAIL_MESSAGE } from "@/lib/order-lookup";
 
 export function HomeOrderTrack() {
   const router = useRouter();
   const [orderNumber, setOrderNumber] = useState("");
-  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +19,7 @@ export function HomeOrderTrack() {
       const res = await fetch("/api/order-lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNumber, phone }),
+        body: JSON.stringify({ orderNumber }),
       });
       const json = (await res.json()) as {
         trackingToken?: string;
@@ -43,62 +40,37 @@ export function HomeOrderTrack() {
   return (
     <section
       id="track-order"
-      className="scroll-mt-28 border-t border-stone-200/70 bg-[#f7f6f4] px-4 py-12 sm:py-14"
+      className="border-t border-stone-200/70 bg-white px-4 py-8"
       dir="rtl"
     >
-      <div className="mx-auto max-w-lg">
-        <div className="mb-6 text-center sm:text-start">
-          <p className="inline-flex items-center gap-1.5 rounded-full bg-brand-900 px-3 py-1 text-xs font-bold text-brand-500">
-            <PackageSearch className="h-3.5 w-3.5" />
-            التتبع
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-bold text-brand-900">
-            تتبّع طلبك
-          </h2>
-          <p className="mt-2 text-sm text-stone-600">
-            أدخل رقم الطلب ورقم هاتفك كما سجّلته عند الطلب لعرض الحالة.
-          </p>
-        </div>
-
+      <div className="mx-auto max-w-md">
+        <h2 className="text-base font-bold text-stone-900">تتبّع طلبك</h2>
+        <p className="mt-1 text-xs text-stone-500">
+          أدخل رقم الطلب (مثل ORD-0003 أو 3)
+        </p>
         <form
           onSubmit={(e) => void onSubmit(e)}
-          className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-[0_8px_30px_rgba(18,18,18,0.06)] sm:p-5"
+          className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center"
         >
-          <Input
-            label="رقم الطلب"
+          <input
             name="orderNumber"
             dir="ltr"
             inputMode="text"
             autoComplete="off"
-            placeholder="مثال: ORD-0003 أو 3"
+            placeholder="ORD-0003"
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
             required
+            className="h-10 flex-1 rounded-lg border border-stone-300 bg-white px-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+            aria-label="رقم الطلب"
           />
-          <Input
-            label="رقم الهاتف"
-            name="phone"
-            type="tel"
-            dir="ltr"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="نفس الرقم المستخدم في الطلب"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            required
-          />
-          <p className="text-xs text-stone-500">
-            يمكنك كتابة الرقم القصير فقط (مثل 3) أو الكامل ORD-0003.
-          </p>
-          {error && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {error}
-            </p>
-          )}
-          <Button type="submit" loading={loading} className="w-full" size="lg">
-            عرض حالة الطلب
+          <Button type="submit" loading={loading} className="sm:shrink-0">
+            عرض الحالة
           </Button>
         </form>
+        {error && (
+          <p className="mt-2 text-xs text-amber-800">{error}</p>
+        )}
       </div>
     </section>
   );
