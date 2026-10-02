@@ -19,6 +19,8 @@ export interface Branch {
   phone: string | null;
   whatsapp_number: string | null;
   map_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
   working_hours: string | null;
   opening_hours: OpeningHours;
   timezone: string;
@@ -104,6 +106,8 @@ export interface Database {
           phone: string | null;
           whatsapp_number: string | null;
           map_url: string | null;
+          latitude: number | null;
+          longitude: number | null;
           working_hours: string | null;
           opening_hours: OpeningHours;
           timezone: string;
@@ -120,6 +124,8 @@ export interface Database {
           phone?: string | null;
           whatsapp_number?: string | null;
           map_url?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           working_hours?: string | null;
           opening_hours?: OpeningHours;
           timezone?: string;
@@ -136,6 +142,8 @@ export interface Database {
           phone?: string | null;
           whatsapp_number?: string | null;
           map_url?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
           working_hours?: string | null;
           opening_hours?: OpeningHours;
           timezone?: string;

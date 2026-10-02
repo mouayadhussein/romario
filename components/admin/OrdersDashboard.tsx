@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "./StatusBadge";
-import { formatPrice } from "@/lib/utils";
+import { formatDateTimeAr, formatPrice } from "@/lib/utils";
+import { CustomerLocationActions } from "@/components/site/LocationViewModal";
 import type { Branch, OrderStatus, OrderWithItems } from "@/types/database";
 
 const statusOptions = [
@@ -189,7 +190,7 @@ export function OrdersDashboard({
                   <p className="mt-1 text-sm text-stone-700">{order.customer_name}</p>
                   <p className="text-xs text-stone-500">
                     {formatPrice(Number(order.total))} ·{" "}
-                    {new Date(order.created_at).toLocaleString("ar")}
+                    {formatDateTimeAr(order.created_at)}
                   </p>
                 </button>
               </li>
@@ -226,7 +227,7 @@ export function OrdersDashboard({
                 </h2>
                 <p className="text-sm text-stone-500">
                   {selected.branches?.name} ·{" "}
-                  {new Date(selected.created_at).toLocaleString("ar")}
+                  {formatDateTimeAr(selected.created_at)}
                 </p>
                 <div className="mt-2">
                   <StatusBadge status={selected.status} />
@@ -253,17 +254,10 @@ export function OrdersDashboard({
                   selected.customer_lng != null && (
                     <p>
                       <strong>الموقع:</strong>{" "}
-                      <a
-                        href={`https://www.google.com/maps?q=${selected.customer_lat},${selected.customer_lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-medium text-brand-700 hover:underline"
-                      >
-                        فتح في خرائط Google
-                      </a>
-                      <span className="mt-0.5 block text-xs text-stone-500" dir="ltr">
-                        {selected.customer_lat}, {selected.customer_lng}
-                      </span>
+                      <CustomerLocationActions
+                        lat={Number(selected.customer_lat)}
+                        lng={Number(selected.customer_lng)}
+                      />
                     </p>
                   )}
                 {selected.table_number && (

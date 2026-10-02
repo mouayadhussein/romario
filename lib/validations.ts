@@ -211,6 +211,18 @@ export const branchSchema = z.object({
       return normalizeWhatsappNumber(v);
     }),
   map_url: optionalUrl,
+  latitude: z
+    .number({ error: "خط العرض غير صالح" })
+    .min(-90, "خط العرض غير صالح")
+    .max(90, "خط العرض غير صالح")
+    .optional()
+    .nullable(),
+  longitude: z
+    .number({ error: "خط الطول غير صالح" })
+    .min(-180, "خط الطول غير صالح")
+    .max(180, "خط الطول غير صالح")
+    .optional()
+    .nullable(),
   working_hours: z
     .string()
     .trim()
@@ -231,6 +243,16 @@ export const branchSchema = z.object({
     .number({ error: "الترتيب غير صالح" })
     .int("الترتيب يجب أن يكون عدداً صحيحاً")
     .min(0, "الترتيب لا يمكن أن يكون سالباً"),
+}).superRefine((data, ctx) => {
+  const hasLat = data.latitude != null;
+  const hasLng = data.longitude != null;
+  if (hasLat !== hasLng) {
+    ctx.addIssue({
+      code: "custom",
+      message: "يجب إرسال خط العرض وخط الطول معاً أو تركهما فارغين",
+      path: hasLat ? ["longitude"] : ["latitude"],
+    });
+  }
 });
 
 export type BranchInput = z.infer<typeof branchSchema>;

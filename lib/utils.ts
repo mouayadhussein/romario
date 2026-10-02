@@ -10,6 +10,36 @@ export function formatPrice(amount: number): string {
   return `${amount.toFixed(2)} ${config.currencySymbol}`;
 }
 
+/** Deterministic Arabic-facing datetime (Asia/Damascus) — hydration-safe. */
+export function formatDateTimeAr(
+  value: string | Date,
+  timeZone = "Asia/Damascus"
+): string {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+
+  const day = get("day");
+  const month = get("month");
+  const year = get("year");
+  const hour = get("hour");
+  const minute = get("minute");
+  const second = get("second");
+
+  return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+}
+
 export function sanitizeNote(note: string | null | undefined, maxLength = 200): string | null {
   if (!note) return null;
   const cleaned = Array.from(

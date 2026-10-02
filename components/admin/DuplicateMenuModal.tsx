@@ -25,42 +25,49 @@ export function DuplicateMenuModal({
   branches: Branch[];
   onDone: () => void;
 }) {
-  const [source, setSource] = useState(branches[0]?.id ?? "");
-  const [target, setTarget] = useState(
-    branches[1]?.id ?? branches[0]?.id ?? ""
-  );
+  const defaultSource = branches[0]?.id ?? "";
+  const defaultTarget = branches[1]?.id ?? branches[0]?.id ?? "";
+
+  const [source, setSource] = useState(defaultSource);
+  const [target, setTarget] = useState(defaultTarget);
   const [categories, setCategories] = useState<BranchCategoryWithItems[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [loadingCats, setLoadingCats] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
 
-  useEffect(() => {
-    if (!open) return;
-    setSource(branches[0]?.id ?? "");
-    setTarget(branches[1]?.id ?? branches[0]?.id ?? "");
-    setSelectedItems(new Set());
-    setExpanded(new Set());
-    setCategories([]);
-  }, [open, branches]);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setSource(defaultSource);
+      setTarget(defaultTarget);
+      setSelectedItems(new Set());
+      setExpanded(new Set());
+      setCategories([]);
+      setLoadedFor(null);
+    }
+  }
+
+  const loadingCats = open && !!source && loadedFor !== source;
 
   useEffect(() => {
     if (!open || !source) return;
 
     let cancelled = false;
-    setLoadingCats(true);
-    setSelectedItems(new Set());
-    setExpanded(new Set());
 
     void listBranchCategories(source).then((result) => {
       if (cancelled) return;
-      setLoadingCats(false);
       if (result.error) {
         toast.error(result.error);
         setCategories([]);
+        setLoadedFor(source);
         return;
       }
       setCategories(result.categories ?? []);
+      setSelectedItems(new Set());
+      setExpanded(new Set());
+      setLoadedFor(source);
     });
 
     return () => {

@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, Store } from "lucide-react";
 import type { HomeSearchCategory } from "./HomeHeader";
 
+function subscribeNoop() {
+  return () => {};
+}
+
 function CategoryTile({ category }: { category: HomeSearchCategory }) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
     null
   );
@@ -18,10 +22,6 @@ function CategoryTile({ category }: { category: HomeSearchCategory }) {
   const listboxId = useId();
   const single = category.branches.length === 1;
   const onlyBranch = category.branches[0];
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   function updatePosition() {
     const btn = buttonRef.current;
@@ -155,7 +155,7 @@ function CategoryTile({ category }: { category: HomeSearchCategory }) {
             </p>
             <ul className="max-h-56 space-y-0.5 overflow-y-auto">
               {category.branches.map((branch) => (
-                <li key={branch.id} role="option">
+                <li key={branch.id} role="option" aria-selected={false}>
                   <Link
                     href={`/${branch.slug}`}
                     onClick={() => setOpen(false)}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { MapPin, Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "@/lib/cart";
 import { Button } from "@/components/ui/Button";
@@ -12,41 +12,32 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BranchOpenBadge } from "./BranchHours";
+import { LocationPickerModal } from "./LocationPickerModal";
 import { formatPrice } from "@/lib/utils";
 import { getDictionary } from "@/lib/i18n";
 import { getBranchStatus } from "@/lib/opening-hours";
+import {
+  geolocationErrorMessage,
+  hasGoogleMapsApiKey,
+  roundLatLng,
+  type LatLng,
+} from "@/lib/google-maps";
 import { buildWhatsAppMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import type { Branch, OrderType } from "@/types/database";
 import Link from "next/link";
 
 const t = getDictionary("ar").site;
 
-type CustomerLocation = { lat: number; lng: number };
-
-function mapsUrl(lat: number, lng: number) {
-  return `https://www.google.com/maps?q=${lat},${lng}`;
-}
-
-function geolocationErrorMessage(error: GeolocationPositionError): string {
-  switch (error.code) {
-    case error.PERMISSION_DENIED:
-      return "تم رفض إذن الموقع. لتفعيله: افتح إعدادات المتصفح لهذا الموقع واسمح بالوصول إلى الموقع، ثم أعد المحاولة.";
-    case error.POSITION_UNAVAILABLE:
-      return "تعذّر تحديد موقعك حالياً. تأكد من تفعيل خدمة الموقع في الجهاز ثم أعد المحاولة.";
-    case error.TIMEOUT:
-      return "انتهت مهلة تحديد الموقع. حاول مرة أخرى في مكان بإشارة أفضل.";
-    default:
-      return "حدث خطأ أثناء تحديد الموقع. حاول مرة أخرى.";
-  }
-}
-
 export function CartCheckout({ branch }: { branch: Branch }) {
   const router = useRouter();
-  const { items, updateQuantity, updateNote, removeItem, clearCart, total } = useCart();
+  const { items, updateQuantity, updateNote, removeItem, clearCart, total } =
+    useCart();
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [location, setLocation] = useState<CustomerLocation | null>(null);
+  const [location, setLocation] = useState<LatLng | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const mapsEnabled = hasGoogleMapsApiKey();
   const [orderType, setOrderType] = useState<OrderType>("delivery");
   const [form, setForm] = useState({
     customerName: "",
@@ -65,6 +56,7 @@ export function CartCheckout({ branch }: { branch: Branch }) {
     if (next !== "delivery") {
       setLocation(null);
       setLocationError(null);
+      setMapOpen(false);
     }
   }
 
@@ -78,15 +70,16 @@ export function CartCheckout({ branch }: { branch: Branch }) {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLocation({
-          lat: Number(pos.coords.latitude.toFixed(6)),
-          lng: Number(pos.coords.longitude.toFixed(6)),
-        });
+        setLocation(
+          roundLatLng({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          })
+        );
         setLocating(false);
         toast.success("تم تحديد الموقع");
       },
       (err) => {
-        setLocation(null);
         setLocationError(geolocationErrorMessage(err));
         setLocating(false);
       },
@@ -162,12 +155,14 @@ export function CartCheckout({ branch }: { branch: Branch }) {
       }
 
       const orderNumber = data.orderNumber!;
-      const orderItems = data.orderItems ?? items.map((i) => ({
-        name: i.name,
-        quantity: i.quantity,
-        price: i.price,
-        note: i.note || null,
-      }));
+      const orderItems =
+        data.orderItems ??
+        items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.price,
+          note: i.note || null,
+        }));
       const orderTotal = data.total ?? total;
 
       clearCart();
@@ -191,7 +186,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         if (url) window.open(url, "_blank");
       }
 
-      router.push(`/${branch.slug}/confirmation?order=${encodeURIComponent(orderNumber)}`);
+      router.push(
+        `/${branch.slug}/confirmation?order=${encodeURIComponent(orderNumber)}`
+      );
     } catch {
       toast.error("حدث خطأ في الاتصال");
     } finally {
@@ -222,7 +219,13 @@ export function CartCheckout({ branch }: { branch: Branch }) {
             <div className="flex gap-3">
               <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-stone-100">
                 {item.imageUrl ? (
-                  <Image src={item.imageUrl} alt={item.name} fill className="object-cover" sizes="64px" />
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                    sizes="64px"
+                  />
                 ) : null}
               </div>
               <div className="min-w-0 flex-1">
@@ -242,16 +245,22 @@ export function CartCheckout({ branch }: { branch: Branch }) {
                   <button
                     type="button"
                     className="rounded-md border border-stone-300 p-1"
-                    onClick={() => updateQuantity(item.itemId, item.quantity - 1)}
+                    onClick={() =>
+                      updateQuantity(item.itemId, item.quantity - 1)
+                    }
                     aria-label="إنقاص"
                   >
                     <Minus className="h-3.5 w-3.5" />
                   </button>
-                  <span className="min-w-6 text-center text-sm font-medium">{item.quantity}</span>
+                  <span className="min-w-6 text-center text-sm font-medium">
+                    {item.quantity}
+                  </span>
                   <button
                     type="button"
                     className="rounded-md border border-stone-300 p-1"
-                    onClick={() => updateQuantity(item.itemId, item.quantity + 1)}
+                    onClick={() =>
+                      updateQuantity(item.itemId, item.quantity + 1)
+                    }
                     aria-label="زيادة"
                     disabled={orderingDisabled}
                   >
@@ -275,7 +284,10 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         ))}
       </section>
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+      >
         <h2 className="text-lg font-bold text-stone-900">{t.checkout}</h2>
         <Input
           label={t.customerName}
@@ -283,7 +295,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           required
           value={form.customerName}
           error={errors.customerName}
-          onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customerName: e.target.value }))
+          }
           disabled={orderingDisabled}
         />
         <Input
@@ -293,7 +307,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           dir="ltr"
           value={form.customerPhone}
           error={errors.customerPhone}
-          onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, customerPhone: e.target.value }))
+          }
           disabled={orderingDisabled}
         />
         <Select
@@ -316,38 +332,62 @@ export function CartCheckout({ branch }: { branch: Branch }) {
               required
               value={form.customerAddress}
               error={errors.customerAddress}
-              onChange={(e) => setForm((f) => ({ ...f, customerAddress: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, customerAddress: e.target.value }))
+              }
               disabled={orderingDisabled}
             />
 
             <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
-              <p className="text-sm font-medium text-stone-800">الموقع على الخريطة (اختياري)</p>
+              <p className="text-sm font-medium text-stone-800">
+                الموقع على الخريطة
+              </p>
+              <p className="text-xs text-stone-500">تحديد الموقع اختياري</p>
+
               {!location ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  loading={locating}
-                  disabled={orderingDisabled || locating}
-                  onClick={locateMe}
-                >
-                  <MapPin className="h-4 w-4" />
-                  📍 حدد موقعي
-                </Button>
+                mapsEnabled ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={orderingDisabled}
+                    onClick={() => {
+                      setLocationError(null);
+                      setMapOpen(true);
+                    }}
+                  >
+                    📍 تحديد الموقع على الخريطة
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    loading={locating}
+                    disabled={orderingDisabled || locating}
+                    onClick={locateMe}
+                  >
+                    استخدم موقعي الحالي
+                  </Button>
+                )
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm font-semibold text-emerald-800">تم تحديد الموقع</p>
-                  <p className="text-xs text-stone-500" dir="ltr">
-                    {location.lat}, {location.lng}
+                  <p className="text-sm font-semibold text-emerald-800">
+                    تم تحديد الموقع ✓
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <a
-                      href={mapsUrl(location.lat, location.lng)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-stone-50"
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={orderingDisabled}
+                      onClick={() => {
+                        setLocationError(null);
+                        if (mapsEnabled) setMapOpen(true);
+                        else locateMe();
+                      }}
                     >
-                      عرض على الخريطة
-                    </a>
+                      <Pencil className="h-3.5 w-3.5" />
+                      تعديل
+                    </Button>
                     <Button
                       type="button"
                       size="sm"
@@ -357,7 +397,7 @@ export function CartCheckout({ branch }: { branch: Branch }) {
                         setLocationError(null);
                       }}
                     >
-                      إزالة الموقع
+                      إزالة
                     </Button>
                   </div>
                 </div>
@@ -365,9 +405,6 @@ export function CartCheckout({ branch }: { branch: Branch }) {
               {locationError && (
                 <p className="text-xs text-red-600">{locationError}</p>
               )}
-              <p className="text-xs text-stone-500">
-                نستخدم موقعك فقط لتوصيل هذا الطلب
-              </p>
             </div>
           </>
         )}
@@ -378,7 +415,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
             required
             value={form.tableNumber}
             error={errors.tableNumber}
-            onChange={(e) => setForm((f) => ({ ...f, tableNumber: e.target.value }))}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, tableNumber: e.target.value }))
+            }
             disabled={orderingDisabled}
           />
         )}
@@ -387,7 +426,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           name="generalNote"
           placeholder={t.generalNotePlaceholder}
           value={form.generalNote}
-          onChange={(e) => setForm((f) => ({ ...f, generalNote: e.target.value }))}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, generalNote: e.target.value }))
+          }
           disabled={orderingDisabled}
         />
 
@@ -396,7 +437,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
             <span>{t.total}</span>
             <span className="text-brand-700">{formatPrice(total)}</span>
           </div>
-          <p className="mt-1 text-sm font-medium text-emerald-700">{t.cashOnDelivery}</p>
+          <p className="mt-1 text-sm font-medium text-emerald-700">
+            {t.cashOnDelivery}
+          </p>
         </div>
 
         <Button
@@ -406,9 +449,24 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           loading={loading}
           disabled={orderingDisabled}
         >
-          {orderingDisabled ? "الفرع مغلق — لا يمكن إرسال الطلب" : t.submitOrder}
+          {orderingDisabled
+            ? "الفرع مغلق — لا يمكن إرسال الطلب"
+            : t.submitOrder}
         </Button>
       </form>
+
+      {mapsEnabled && (
+        <LocationPickerModal
+          open={mapOpen}
+          onClose={() => setMapOpen(false)}
+          initialLocation={location}
+          onConfirm={(next) => {
+            setLocation(next);
+            setLocationError(null);
+            toast.success("تم تحديد الموقع");
+          }}
+        />
+      )}
     </div>
   );
 }

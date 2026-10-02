@@ -51,7 +51,12 @@ export async function upsertBranch(data: unknown, id?: string): Promise<ActionRe
   const payload = {
     ...parsed.data,
     slug: uniqueSlug,
-    map_url: parsed.data.map_url || null,
+    latitude: parsed.data.latitude ?? null,
+    longitude: parsed.data.longitude ?? null,
+    map_url:
+      parsed.data.latitude != null && parsed.data.longitude != null
+        ? `https://www.google.com/maps?q=${parsed.data.latitude},${parsed.data.longitude}`
+        : parsed.data.map_url || null,
     address: parsed.data.address || null,
     phone: parsed.data.phone || null,
     whatsapp_number: parsed.data.whatsapp_number || null,

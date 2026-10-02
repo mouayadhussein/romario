@@ -58,6 +58,8 @@ export function BranchesManager({
         phone: branch.phone,
         whatsapp_number: branch.whatsapp_number,
         map_url: branch.map_url || "",
+        latitude: branch.latitude ?? null,
+        longitude: branch.longitude ?? null,
         working_hours: branch.working_hours,
         opening_hours: branch.opening_hours ?? {},
         timezone: branch.timezone || "Asia/Damascus",
