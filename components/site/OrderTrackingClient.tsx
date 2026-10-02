@@ -14,6 +14,8 @@ const orderTypeLabels: Record<OrderType, string> = {
   dine_in: "داخل المطعم",
 };
 
+const POLL_MS = 4_000;
+
 export function OrderTrackingClient({
   token,
   initial,
@@ -28,9 +30,16 @@ export function OrderTrackingClient({
 
     async function poll() {
       try {
-        const res = await fetch(`/api/order-tracking/${token}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/order-tracking/${token}?_=${Date.now()}`,
+          {
+            cache: "no-store",
+            headers: {
+              Pragma: "no-cache",
+              "Cache-Control": "no-cache",
+            },
+          }
+        );
         if (!res.ok) return;
         const json = (await res.json()) as PublicTrackingPayload & {
           error?: string;
@@ -41,10 +50,20 @@ export function OrderTrackingClient({
       }
     }
 
-    const id = window.setInterval(poll, 15_000);
+    void poll();
+    const id = window.setInterval(poll, POLL_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [token]);
 
@@ -132,7 +151,7 @@ export function OrderTrackingClient({
         </div>
       </div>
       <p className="mt-4 text-xs text-stone-400">
-        يتم تحديث الحالة تلقائياً كل 15 ثانية. لا تُعرض بياناتك الشخصية هنا.
+        يتم تحديث الحالة تلقائياً كل بضع ثوانٍ. لا تُعرض بياناتك الشخصية هنا.
       </p>
     </main>
   );

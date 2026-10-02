@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Volume2, VolumeX, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/supabase/client";
@@ -70,6 +71,8 @@ function toSummary(row: Record<string, unknown>): PendingOrderSummary {
 }
 
 export function NotificationBell({ role }: { role: Role }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
   const [branchIds, setBranchIds] = useState<string[]>([]);
   const [pending, setPending] = useState<PendingOrderSummary[]>([]);
@@ -271,7 +274,13 @@ export function NotificationBell({ role }: { role: Role }) {
   async function openDetail(orderId: string) {
     setOpen(false);
     if (role === "admin") {
-      dispatchOpenOrder(orderId);
+      const href = `/admin?order=${encodeURIComponent(orderId)}`;
+      if (pathname === "/admin") {
+        dispatchOpenOrder(orderId);
+        router.replace(href);
+      } else {
+        router.push(href);
+      }
       return;
     }
     setClaimedByOther(false);

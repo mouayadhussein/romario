@@ -7,8 +7,18 @@ import {
 } from "@/lib/order-lookup";
 import type { OrderStatus, OrderType } from "@/types/database";
 
+/** Never cache tracking responses — status changes (claim/deliver) must be live. */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const NO_STORE = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
 
 export async function GET(
   _request: Request,
@@ -16,7 +26,10 @@ export async function GET(
 ) {
   const { token } = await context.params;
   if (!UUID_RE.test(token)) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "not found" },
+      { status: 404, headers: NO_STORE }
+    );
   }
 
   const admin = createServiceClient();
@@ -29,7 +42,10 @@ export async function GET(
     .maybeSingle();
 
   if (!order || order.deleted_at) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "not found" },
+      { status: 404, headers: NO_STORE }
+    );
   }
 
   const status = order.status as OrderStatus;
@@ -70,9 +86,5 @@ export async function GET(
     courier,
   });
 
-  return NextResponse.json(payload, {
-    headers: {
-      "Cache-Control": "no-store",
-    },
-  });
+  return NextResponse.json(payload, { headers: NO_STORE });
 }

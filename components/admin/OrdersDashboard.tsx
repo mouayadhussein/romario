@@ -79,10 +79,15 @@ export function OrdersDashboard({
   const [rtStatus, setRtStatus] = useState<OrdersRealtimeStatus>("connecting");
   const knownIds = useRef(new Set(initialOrders.map((o) => o.id)));
   const selectedIdRef = useRef(selectedId);
+  const ordersRef = useRef(orders);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
 
   const refreshEvents = useCallback(async (orderId: string) => {
     const supabase = createClient();
@@ -99,6 +104,45 @@ export function OrdersDashboard({
       }));
     }
   }, []);
+
+  const focusOrder = useCallback(
+    async (orderId: string) => {
+      setSelectedId(orderId);
+      setStatusFilter("all");
+      setBranchFilter("all");
+
+      const exists = ordersRef.current.some((o) => o.id === orderId);
+      if (!exists) {
+        const supabase = createClient();
+        const { data: full } = await supabase
+          .from("orders")
+          .select(ORDER_FULL_SELECT)
+          .eq("id", orderId)
+          .is("deleted_at", null)
+          .maybeSingle();
+        if (full) {
+          const order = full as unknown as OrderWithItems;
+          knownIds.current.add(order.id);
+          setOrders((prev) => [
+            order,
+            ...prev.filter((o) => o.id !== order.id),
+          ]);
+        }
+      }
+
+      void refreshEvents(orderId);
+
+      window.setTimeout(() => {
+        document
+          .getElementById(`admin-order-${orderId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        document
+          .getElementById("order-print")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+    },
+    [refreshEvents]
+  );
 
   const refetchOrders = useCallback(async () => {
     const supabase = createClient();
@@ -120,16 +164,22 @@ export function OrdersDashboard({
   useEffect(() => {
     const onOpen = (e: Event) => {
       const detail = (e as CustomEvent<{ orderId: string }>).detail;
-      if (detail?.orderId) {
-        setSelectedId(detail.orderId);
-        setStatusFilter("all");
-        setBranchFilter("all");
-        void refreshEvents(detail.orderId);
-      }
+      if (detail?.orderId) void focusOrder(detail.orderId);
     };
     window.addEventListener(OPEN_ORDER_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_ORDER_EVENT, onOpen);
-  }, [refreshEvents]);
+  }, [focusOrder]);
+
+  // Deep-link from bell when landing on /admin?order=<id>
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("order");
+    if (!id) return;
+    const t = window.setTimeout(() => {
+      void focusOrder(id);
+    }, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -349,7 +399,7 @@ export function OrdersDashboard({
         <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
           <ul className="no-print max-h-[70vh] space-y-2 overflow-y-auto">
             {filtered.map((order) => (
-              <li key={order.id}>
+              <li key={order.id} id={`admin-order-${order.id}`}>
                 <button
                   type="button"
                   onClick={() => {
