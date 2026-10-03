@@ -15,14 +15,14 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-900" dir="rtl">
+    <div className="min-h-screen min-w-0 overflow-x-clip bg-stone-100 text-stone-900" dir="rtl">
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-lg items-center justify-between gap-3 px-4 py-3">
-          <div>
-            <p className="text-sm font-bold text-brand-700">{config.appName}</p>
+        <div className="mx-auto flex max-w-lg min-w-0 items-center justify-between gap-3 px-3 py-3 sm:px-4">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-brand-700">{config.appName}</p>
             <p className="text-xs text-stone-500">تطبيق التوصيل</p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <NotificationBell role="staff" />
             <button
               type="button"
@@ -38,7 +38,7 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-lg px-3 py-4 pb-10">{children}</main>
+      <main className="mx-auto min-w-0 max-w-lg px-3 py-4 pb-10">{children}</main>
     </div>
   );
 }

@@ -15,9 +15,9 @@ export function HomeLocations({ branches }: { branches: Branch[] }) {
   return (
     <section
       id="locations"
-      className="scroll-mt-28 border-t border-stone-200/70 bg-white/60 px-4 py-14 sm:py-16"
+      className="scroll-mt-28 overflow-x-clip border-t border-stone-200/70 bg-white/60 px-4 py-14 sm:py-16"
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto min-w-0 max-w-6xl">
         <div className="mb-8">
           <p className="inline-flex rounded-full bg-brand-900 px-3 py-1 text-xs font-bold text-brand-500">
             المواقع

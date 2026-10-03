@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ShoppingBag, ArrowRight } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { config } from "@/lib/config";
+import { formatPrice } from "@/lib/utils";
 
 export function SiteHeader({
   branchName,
@@ -45,19 +46,23 @@ export function SiteHeader({
 }
 
 function CartButton({ branchSlug }: { branchSlug: string }) {
-  const { count } = useCart();
+  const { count, total } = useCart();
   return (
     <Link
       href={`/${branchSlug}/cart`}
-      className="relative inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
+      className="relative inline-flex items-center gap-2 rounded-full bg-brand-900 px-2.5 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-800"
     >
-      <ShoppingBag className="h-4 w-4" />
-      <span>السلة</span>
-      {count > 0 && (
-        <span className="absolute -top-1.5 -left-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-xs font-bold text-brand-900">
-          {count}
-        </span>
-      )}
+      <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-brand-900">
+        <ShoppingBag className="h-4 w-4" />
+        {count > 0 && (
+          <span className="absolute -top-1 -left-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-brand-900">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </span>
+      <span className="hidden pe-1 sm:inline">
+        {count > 0 ? formatPrice(total) : "السلة"}
+      </span>
     </Link>
   );
 }

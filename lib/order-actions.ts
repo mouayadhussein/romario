@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createServiceClient } from "@/supabase/admin";
 import {
   cancelOrderSchema,
@@ -67,9 +68,7 @@ export async function updateOrderStatus(
     status: OrderStatus;
     delivered_at?: string;
   } = { status: to };
-  if (to === "on_the_way" && !order.assigned_to) {
-    return { error: "عيّن موظفاً أو اترك الطلب جاهزاً ليستلمه موظف" };
-  }
+  // Admin may set on_the_way / delivered without a staff claim (optional assignment).
   if (to === "delivered") {
     patch.delivered_at = new Date().toISOString();
   }
@@ -292,15 +291,30 @@ export async function assignOrderStaff(
   return { success: true };
 }
 
+const optionalStaffPassword = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z
+    .string()
+    .trim()
+    .min(8, "كلمة السر قصيرة جداً (8 على الأقل)")
+    .max(72, "كلمة السر طويلة جداً")
+    .optional()
+);
+
 export async function createStaffAction(input: unknown): Promise<ActionResult> {
   await requireAdmin();
-  const parsed = staffUpsertSchema.safeParse(input);
+  const parsed = staffUpsertSchema
+    .extend({
+      password: optionalStaffPassword,
+    })
+    .safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "بيانات غير صالحة" };
   }
 
   const admin = createServiceClient();
-  const tempPassword = generateTempPassword();
+  const customPassword = parsed.data.password?.trim() || "";
+  const tempPassword = customPassword || generateTempPassword();
 
   const { data: created, error: authErr } =
     await admin.auth.admin.createUser({
@@ -351,9 +365,8 @@ export async function updateStaffAction(
 ): Promise<ActionResult> {
   await requireAdmin();
   const parsed = staffUpsertSchema
-    .omit({ email: true })
     .extend({
-      email: staffUpsertSchema.shape.email.optional(),
+      password: optionalStaffPassword,
     })
     .safeParse(input);
   if (!parsed.success) {
@@ -371,6 +384,31 @@ export async function updateStaffAction(
     .eq("user_id", userId);
   if (error) return { error: "فشل تحديث الموظف" };
 
+  const authPatch: { email?: string; password?: string; user_metadata?: object } =
+    {
+      user_metadata: { role: "staff", full_name: parsed.data.full_name },
+    };
+  if (parsed.data.email?.trim()) {
+    authPatch.email = parsed.data.email.trim().toLowerCase();
+  }
+  const newPassword = parsed.data.password?.trim();
+  if (newPassword) {
+    authPatch.password = newPassword;
+  }
+
+  const { error: authErr } = await admin.auth.admin.updateUserById(
+    userId,
+    authPatch
+  );
+  if (authErr) {
+    logger.error("staff.update_auth_failed", {
+      code: authErr.status ?? "unknown",
+    });
+    return {
+      error: "تم تحديث البيانات لكن فشل تحديث الحساب (تحقق من الإيميل)",
+    };
+  }
+
   await admin.from("staff_branches").delete().eq("staff_id", userId);
   const rows = parsed.data.branch_ids.map((branch_id) => ({
     staff_id: userId,
@@ -380,7 +418,10 @@ export async function updateStaffAction(
   if (brErr) return { error: "فشل تحديث الفروع" };
 
   revalidatePath("/admin/staff");
-  return { success: true };
+  return {
+    success: true,
+    tempPassword: newPassword || undefined,
+  };
 }
 
 export async function setStaffActive(

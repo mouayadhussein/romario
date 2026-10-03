@@ -9,13 +9,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     pathname === "/admin/login" || pathname === "/admin/mfa/verify";
 
   if (bare) {
-    return <div className="min-h-screen bg-stone-100">{children}</div>;
+    return (
+      <div className="min-h-screen overflow-x-clip bg-stone-100">{children}</div>
+    );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-stone-50 md:flex-row">
+    <div className="flex min-h-screen min-w-0 flex-col overflow-x-clip bg-stone-50 md:flex-row">
       <AdminSidebar />
-      <div className="flex-1 p-4 md:p-6">{children}</div>
+      <div className="min-w-0 flex-1 overflow-x-clip px-3 py-4 md:p-6">
+        {children}
+      </div>
     </div>
   );
 }

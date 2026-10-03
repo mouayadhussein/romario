@@ -425,14 +425,14 @@ export function NotificationBell({ role }: { role: Role }) {
         <button
           type="button"
           onClick={enableSound}
-          className="absolute top-full start-0 z-30 mt-1 whitespace-nowrap rounded-lg border border-brand-200 bg-white px-2 py-1 text-[11px] font-semibold text-brand-800 shadow sm:hidden"
+          className="absolute top-full end-0 z-30 mt-1 max-w-[min(14rem,calc(100vw-1.5rem))] rounded-lg border border-brand-200 bg-white px-2 py-1 text-start text-[11px] font-semibold leading-snug text-brand-800 shadow sm:hidden"
         >
           تفعيل التنبيهات الصوتية
         </button>
       )}
 
       {soundBlocked && (
-        <p className="absolute top-full end-0 z-30 mt-1 w-48 rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 shadow">
+        <p className="absolute top-full end-0 z-30 mt-1 w-48 max-w-[calc(100vw-1.5rem)] rounded-lg border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 shadow">
           المتصفح منع تشغيل الصوت. اضغط «تفعيل التنبيهات الصوتية».
           <button
             type="button"

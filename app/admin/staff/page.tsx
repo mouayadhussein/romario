@@ -29,35 +29,48 @@ export default async function AdminStaffPage() {
 
   const staffList = (staffRows ?? []) as Staff[];
 
-  const counts = await Promise.all(
-    staffList.map(async (s) => {
-      const [{ count: assignedOrderCount }, { count: settlementCount }] =
-        await Promise.all([
-          admin
-            .from("orders")
-            .select("*", { count: "exact", head: true })
-            .eq("assigned_to", s.user_id),
-          admin
-            .from("cash_settlements")
-            .select("*", { count: "exact", head: true })
-            .eq("staff_id", s.user_id),
-        ]);
-      return {
-        user_id: s.user_id,
-        has_records: staffHasRecords({
-          assignedOrderCount: assignedOrderCount ?? 0,
-          settlementCount: settlementCount ?? 0,
-        }),
-      };
-    })
-  );
+  const [counts, emailEntries] = await Promise.all([
+    Promise.all(
+      staffList.map(async (s) => {
+        const [{ count: assignedOrderCount }, { count: settlementCount }] =
+          await Promise.all([
+            admin
+              .from("orders")
+              .select("*", { count: "exact", head: true })
+              .eq("assigned_to", s.user_id),
+            admin
+              .from("cash_settlements")
+              .select("*", { count: "exact", head: true })
+              .eq("staff_id", s.user_id),
+          ]);
+        return {
+          user_id: s.user_id,
+          has_records: staffHasRecords({
+            assignedOrderCount: assignedOrderCount ?? 0,
+            settlementCount: settlementCount ?? 0,
+          }),
+        };
+      })
+    ),
+    Promise.all(
+      staffList.map(async (s) => {
+        const { data, error } = await admin.auth.admin.getUserById(s.user_id);
+        if (error || !data.user?.email) {
+          return [s.user_id, null] as const;
+        }
+        return [s.user_id, data.user.email] as const;
+      })
+    ),
+  ]);
 
   const hasRecordsMap = new Map(counts.map((c) => [c.user_id, c.has_records]));
+  const emailMap = new Map(emailEntries);
 
   const initialStaff = staffList.map((s) => ({
     ...s,
     branch_ids: byStaff.get(s.user_id) ?? [],
     has_records: hasRecordsMap.get(s.user_id) ?? false,
+    email: emailMap.get(s.user_id) ?? null,
   }));
 
   return (

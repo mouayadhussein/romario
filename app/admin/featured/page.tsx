@@ -72,7 +72,7 @@ export default async function AdminFeaturedPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-3xl">
       <FeaturedMealsManager initialSettings={settings} meals={meals} />
     </div>
   );

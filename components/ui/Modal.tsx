@@ -35,15 +35,19 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
         aria-label="إغلاق"
         onClick={onClose}
       />
-      <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-5 py-4">
           <h2 className="text-lg font-bold text-stone-900">{title}</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="إغلاق">
             ✕
           </Button>
         </div>
-        {children}
-        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && (
+          <div className="flex shrink-0 justify-end gap-2 border-t border-stone-100 bg-white px-5 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

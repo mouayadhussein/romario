@@ -6,6 +6,7 @@ import { BranchHero } from "./BranchHero";
 import { CategoryTabs } from "./CategoryTabs";
 import { SearchBar } from "./SearchBar";
 import { ItemCard, type ItemViewMode } from "./ItemCard";
+import { FloatingCartBar } from "./FloatingCartBar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getDictionary } from "@/lib/i18n";
 import { getBranchStatus } from "@/lib/opening-hours";
@@ -64,7 +65,7 @@ export function BranchMenu({
   }, [activeCategory, categories, filtered]);
 
   return (
-    <div className="min-h-screen bg-[#f3f3f3]">
+    <div className="min-h-screen min-w-0 overflow-x-clip bg-[#f3f3f3]">
       <BranchHero branch={branch} cuisineLine={cuisineLine || undefined} />
 
       <CategoryTabs
@@ -77,7 +78,9 @@ export function BranchMenu({
         onChange={setActiveCategory}
       />
 
-      <div className="mx-auto max-w-3xl px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
+      <FloatingCartBar branchSlug={branch.slug} />
+
+      <div className="mx-auto min-w-0 max-w-3xl px-3 pb-28 pt-3 sm:px-6 sm:pt-4">
         {orderingDisabled && (
           <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             الفرع مغلق حالياً. يمكنك تصفّح القائمة، لكن لا يمكن إضافة وجبات أو إرسال

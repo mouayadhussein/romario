@@ -18,13 +18,12 @@ interface CategoryTabsProps {
 
 export function CategoryTabs({ categories, activeId, onChange }: CategoryTabsProps) {
   return (
-    <div className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">
+    <div className="sticky top-0 z-20 overflow-x-clip border-b border-stone-200 bg-white/95 backdrop-blur">
       <div
-        className="mx-auto max-w-3xl overflow-x-auto px-3 sm:px-6"
-        style={{ scrollbarWidth: "none" }}
+        className="mx-auto max-w-3xl overflow-x-auto overscroll-x-contain px-3 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden"
       >
         <div
-          className="flex min-w-max items-stretch gap-1 py-0"
+          className="flex w-max max-w-none items-stretch gap-1 py-0"
           role="tablist"
           aria-label="التصنيفات"
         >

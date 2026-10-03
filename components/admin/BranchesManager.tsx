@@ -89,7 +89,7 @@ export function BranchesManager({
         </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+      <div className="min-w-0 overflow-x-auto overscroll-x-contain rounded-xl border border-stone-200 bg-white">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-stone-50 text-stone-600">
             <tr>

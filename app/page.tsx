@@ -148,7 +148,7 @@ export default async function HomePage() {
   const anyOpen = branches.some((b) => getBranchStatus(b).isOpen);
 
   return (
-    <div className="min-h-screen bg-[#f7f6f4]">
+    <div className="min-h-screen min-w-0 overflow-x-clip bg-[#f7f6f4]">
       <HomeHeader
         anyOpen={anyOpen}
         categories={uniqueCats}

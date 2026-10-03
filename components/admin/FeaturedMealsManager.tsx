@@ -90,16 +90,16 @@ export function FeaturedMealsManager({
   const previewIds = selected.slice(0, displayCount);
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <div className="min-w-0 space-y-4 sm:space-y-5">
+      <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
         <h1 className="text-lg font-bold text-stone-900">الوجبات المميزة</h1>
-        <p className="mt-1 text-sm text-stone-500">
+        <p className="mt-1 text-sm leading-relaxed text-stone-500">
           اختر الوجبات التي تظهر في الصفحة الرئيسية بين الصورة العلوية وقسم
           الفروع. العدد يحدد كم صورة تُعرض للزبون.
         </p>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="block">
+        <div className="mt-4 grid gap-3 sm:grid-cols-[auto_1fr] sm:items-end">
+          <label className="block min-w-0">
             <span className="mb-1 block text-xs font-semibold text-stone-600">
               عدد الصور المعروضة
             </span>
@@ -116,25 +116,29 @@ export function FeaturedMealsManager({
                   )
                 )
               }
-              className="w-28 rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              className="w-full max-w-[8rem] rounded-lg border border-stone-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
             />
           </label>
 
-          <Button type="button" onClick={handleSave} disabled={pending}>
-            <Save className="h-4 w-4" />
-            {pending ? "جاري الحفظ..." : "حفظ"}
-          </Button>
+          <div className="flex min-w-0 flex-wrap gap-2">
+            <Button type="button" onClick={handleSave} disabled={pending}>
+              <Save className="h-4 w-4" />
+              {pending ? "جاري الحفظ..." : "حفظ"}
+            </Button>
 
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={pending}
-            onClick={() =>
-              setSelected(pickDefaultItemIds(meals, displayCount || DEFAULT_FEATURED_COUNT))
-            }
-          >
-            اختيار عشوائي ({displayCount || DEFAULT_FEATURED_COUNT})
-          </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={pending}
+              onClick={() =>
+                setSelected(
+                  pickDefaultItemIds(meals, displayCount || DEFAULT_FEATURED_COUNT)
+                )
+              }
+            >
+              اختيار عشوائي ({displayCount || DEFAULT_FEATURED_COUNT})
+            </Button>
+          </div>
         </div>
 
         <p className="mt-3 text-xs text-stone-500">
@@ -143,7 +147,7 @@ export function FeaturedMealsManager({
       </div>
 
       {previewIds.length > 0 && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
           <h2 className="mb-3 text-sm font-bold text-stone-800">ترتيب العرض</h2>
           <ul className="space-y-2">
             {previewIds.map((id, index) => {
@@ -152,9 +156,9 @@ export function FeaturedMealsManager({
               return (
                 <li
                   key={id}
-                  className="flex items-center gap-3 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2"
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-stone-100 bg-stone-50 px-2 py-2 sm:gap-3 sm:px-3"
                 >
-                  <span className="w-6 text-center text-xs font-bold text-stone-400">
+                  <span className="w-5 shrink-0 text-center text-xs font-bold text-stone-400 sm:w-6">
                     {index + 1}
                   </span>
                   <Thumb url={meal.imageUrl} />
@@ -166,11 +170,12 @@ export function FeaturedMealsManager({
                       {meal.branchName} · {meal.categoryName}
                     </p>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-0.5">
                     <button
                       type="button"
                       className="rounded-md px-2 py-1 text-xs font-medium text-stone-600 hover:bg-white"
                       onClick={() => move(id, -1)}
+                      aria-label="تحريك للأعلى"
                     >
                       ↑
                     </button>
@@ -178,6 +183,7 @@ export function FeaturedMealsManager({
                       type="button"
                       className="rounded-md px-2 py-1 text-xs font-medium text-stone-600 hover:bg-white"
                       onClick={() => move(id, 1)}
+                      aria-label="تحريك للأسفل"
                     >
                       ↓
                     </button>
@@ -189,7 +195,7 @@ export function FeaturedMealsManager({
         </div>
       )}
 
-      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="relative mb-3">
           <Search className="pointer-events-none absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 text-stone-400" />
           <input

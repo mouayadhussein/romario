@@ -156,10 +156,10 @@ export function HomeHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
+      <header className="sticky top-0 z-40 overflow-x-clip px-3 pt-3 sm:px-4">
         <div
           ref={rootRef}
-          className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-3 rounded-2xl border border-stone-200/80 bg-white/95 p-3 shadow-[0_10px_40px_rgba(18,18,18,0.08)] backdrop-blur sm:grid-cols-2 sm:rounded-3xl sm:gap-4 sm:p-3.5"
+          className="mx-auto grid min-w-0 max-w-6xl grid-cols-1 items-center gap-3 rounded-2xl border border-stone-200/80 bg-white/95 p-3 shadow-[0_10px_40px_rgba(18,18,18,0.08)] backdrop-blur sm:grid-cols-2 sm:rounded-3xl sm:gap-4 sm:p-3.5"
         >
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/* Mobile: hamburger opens sidebar */}
@@ -199,7 +199,7 @@ export function HomeHeader({
 
             <span
               className={cn(
-                "ms-auto inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold md:ms-0 lg:inline-flex",
+                "ms-auto hidden shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold lg:inline-flex",
                 anyOpen
                   ? "bg-emerald-50 text-emerald-800"
                   : "bg-stone-100 text-stone-600"

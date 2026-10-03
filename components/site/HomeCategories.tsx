@@ -183,9 +183,9 @@ export function HomeCategories({
   return (
     <section
       id="categories"
-      className="scroll-mt-28 border-t border-stone-200/70 px-4 py-14 sm:py-16"
+      className="scroll-mt-28 overflow-x-clip border-t border-stone-200/70 px-4 py-14 sm:py-16"
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto min-w-0 max-w-6xl">
         <div className="mb-8">
           <p className="inline-flex rounded-full bg-brand-900 px-3 py-1 text-xs font-bold text-brand-500">
             الأصناف
@@ -195,7 +195,7 @@ export function HomeCategories({
           </h2>
         </div>
 
-        <div className="flex gap-5 overflow-x-auto overflow-y-visible pb-4 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 gap-5 overflow-x-auto overscroll-x-contain overflow-y-visible pb-4 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {categories.map((cat) => (
             <CategoryTile key={cat.name} category={cat} />
           ))}

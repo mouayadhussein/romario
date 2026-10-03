@@ -30,7 +30,7 @@ export function BranchHero({
   cuisineLine?: string;
 }) {
   const status = getBranchStatus(branch);
-  const { count } = useCart();
+  const { count } = useCart(); // used in sidebar only
   const wa = normalizeWhatsappNumber(branch.whatsapp_number);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -71,7 +71,7 @@ export function BranchHero({
           />
         </div>
 
-        <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-3.5 pt-2.5 sm:px-6 sm:pb-4 sm:pt-3">
+        <div className="relative z-10 mx-auto w-full max-w-3xl px-4 pb-3.5 pt-2.5 md:px-6 md:pb-7 md:pt-4">
           <div className="flex items-center justify-between gap-3">
             <button
               type="button"
@@ -82,76 +82,62 @@ export function BranchHero({
               <Globe className="h-4 w-4 opacity-90" />
             </button>
 
-            <div className="flex items-center gap-1.5">
-              <Link
-                href={`/${branch.slug}/cart`}
-                className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10"
-                aria-label="السلة"
-              >
-                <ShoppingBag className="h-5 w-5" />
-                {count > 0 && (
-                  <span className="absolute -top-0.5 -left-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-brand-900">
-                    {count}
-                  </span>
-                )}
-              </Link>
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10"
-                aria-label="فتح القائمة"
-                aria-expanded={sidebarOpen}
-                onClick={() => setSidebarOpen(true)}
-              >
-                <Menu className="h-6 w-6" strokeWidth={1.75} />
-              </button>
-            </div>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/95 transition hover:bg-white/10"
+              aria-label="فتح القائمة"
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-6 w-6" strokeWidth={1.75} />
+            </button>
           </div>
 
-          <div className="mt-3 flex flex-col items-center text-center sm:mt-3.5">
-            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-white/25 bg-white shadow-lg sm:h-16 sm:w-16">
-              <span className="font-display text-xl font-extrabold text-brand-600 sm:text-2xl">
+          <div className="mt-3 flex flex-col items-center text-center md:mt-7">
+            <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-white/25 bg-white shadow-lg md:h-24 md:w-24 md:rounded-2xl">
+              <span className="font-display text-xl font-extrabold text-brand-600 md:text-3xl">
                 {config.appName.slice(0, 1)}
               </span>
             </div>
 
-            <h1 className="mt-2 font-display text-xl font-extrabold tracking-tight text-white sm:text-2xl">
+            <h1 className="mt-2 font-display text-xl font-extrabold tracking-tight text-white md:mt-3 md:text-3xl lg:text-4xl">
               {branch.name}
             </h1>
 
             {cuisineLine ? (
-              <p className="mt-1 max-w-md truncate text-xs text-white/75 sm:text-sm">
+              <p className="mt-1 max-w-md truncate text-xs text-white/75 md:mt-1.5 md:text-base">
                 {cuisineLine}
               </p>
             ) : null}
 
-            <div className="mt-2 flex max-w-lg flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-white/85 sm:text-xs">
+            <div className="mt-2 flex max-w-lg flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-white/85 md:mt-3 md:gap-x-4 md:gap-y-1.5 md:text-sm">
               {branch.phone && (
                 <a
                   href={`tel:${branch.phone}`}
-                  className="inline-flex items-center gap-1 transition hover:text-white"
+                  className="inline-flex items-center gap-1 transition hover:text-white md:gap-1.5"
                 >
-                  <Phone className="h-3 w-3 shrink-0 opacity-90" />
+                  <Phone className="h-3 w-3 shrink-0 opacity-90 md:h-3.5 md:w-3.5" />
                   <span dir="ltr">{branch.phone}</span>
                 </a>
               )}
               {branch.address && (
-                <span className="inline-flex min-w-0 items-center gap-1">
-                  <MapPin className="h-3 w-3 shrink-0 opacity-90" />
-                  <span className="max-w-32 truncate sm:max-w-44">
+                <span className="inline-flex min-w-0 items-center gap-1 md:gap-1.5">
+                  <MapPin className="h-3 w-3 shrink-0 opacity-90 md:h-3.5 md:w-3.5" />
+                  <span className="max-w-32 truncate md:max-w-56">
                     {branch.address}
                   </span>
                 </span>
               )}
-              <span className="inline-flex items-center gap-1">
-                <Clock className="h-3 w-3 shrink-0 opacity-90" />
+              <span className="inline-flex items-center gap-1 md:gap-1.5">
+                <Clock className="h-3 w-3 shrink-0 opacity-90 md:h-3.5 md:w-3.5" />
                 <span>{hoursLabel}</span>
               </span>
             </div>
 
-            <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+            <div className="mt-2.5 flex flex-wrap items-center justify-center gap-2 md:mt-4 md:gap-3">
               {branch.map_url && (
                 <SocialCircle href={branch.map_url} label="الموقع">
-                  <Globe2 className="h-3.5 w-3.5" />
+                  <Globe2 className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 </SocialCircle>
               )}
               <SocialCircle label="يوتيوب" disabled>
@@ -170,7 +156,7 @@ export function BranchHero({
                   label="واتساب"
                   className="bg-emerald-500 text-white hover:bg-emerald-400"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
                 </SocialCircle>
               )}
             </div>
@@ -301,7 +287,7 @@ function SocialCircle({
   className?: string;
 }) {
   const base =
-    "inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition sm:h-9 sm:w-9";
+    "inline-flex h-8 w-8 items-center justify-center rounded-full shadow-sm transition md:h-10 md:w-10";
 
   if (disabled || !href) {
     return (

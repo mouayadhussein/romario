@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       dir="rtl"
       className={`${notoArabic.variable} ${cairo.variable} h-full`}
     >
-      <body className="min-h-full bg-[#f7f6f4] font-sans text-stone-900 antialiased">
+      <body className="min-h-full overflow-x-clip bg-[#f7f6f4] font-sans text-stone-900 antialiased">
         {children}
         <Toaster position="top-center" richColors dir="rtl" />
       </body>

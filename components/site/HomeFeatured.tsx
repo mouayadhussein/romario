@@ -9,10 +9,10 @@ export function HomeFeatured({ meals }: { meals: FeaturedMeal[] }) {
   return (
     <section
       id="featured"
-      className="scroll-mt-28 px-3 py-8 sm:px-4 sm:py-10"
+      className="scroll-mt-28 overflow-x-clip px-3 py-8 sm:px-4 sm:py-10"
       aria-labelledby="featured-heading"
     >
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto min-w-0 max-w-3xl">
         <div className="mb-4 flex items-end justify-between gap-3 sm:mb-5">
           <div>
             <p className="inline-flex rounded-full bg-brand-900 px-3 py-1 text-xs font-bold text-brand-500">

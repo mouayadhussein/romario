@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Printer, WifiOff } from "lucide-react";
+import { ChevronDown, Printer, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/supabase/client";
 import {
@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge } from "./StatusBadge";
-import { formatDateTimeAr, formatPrice } from "@/lib/utils";
+import { cn, formatDateTimeAr, formatPrice } from "@/lib/utils";
 import { CustomerLocationActions } from "@/components/site/LocationViewModal";
 import {
   CANCEL_REASON_OPTIONS,
@@ -68,9 +68,7 @@ export function OrdersDashboard({
   const [eventsMap, setEventsMap] = useState(eventsByOrder);
   const [branchFilter, setBranchFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialOrders[0]?.id ?? null
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] =
@@ -105,7 +103,7 @@ export function OrdersDashboard({
     }
   }, []);
 
-  const focusOrder = useCallback(
+  const openOrder = useCallback(
     async (orderId: string) => {
       setSelectedId(orderId);
       setStatusFilter("all");
@@ -135,11 +133,25 @@ export function OrdersDashboard({
       window.setTimeout(() => {
         document
           .getElementById(`admin-order-${orderId}`)
-          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        document
-          .getElementById("order-print")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
+    },
+    [refreshEvents]
+  );
+
+  const toggleOrder = useCallback(
+    (orderId: string) => {
+      if (selectedIdRef.current === orderId) {
+        setSelectedId(null);
+        return;
+      }
+      setSelectedId(orderId);
+      void refreshEvents(orderId);
+      window.setTimeout(() => {
+        document
+          .getElementById(`admin-order-${orderId}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 50);
     },
     [refreshEvents]
   );
@@ -164,18 +176,17 @@ export function OrdersDashboard({
   useEffect(() => {
     const onOpen = (e: Event) => {
       const detail = (e as CustomEvent<{ orderId: string }>).detail;
-      if (detail?.orderId) void focusOrder(detail.orderId);
+      if (detail?.orderId) void openOrder(detail.orderId);
     };
     window.addEventListener(OPEN_ORDER_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_ORDER_EVENT, onOpen);
-  }, [focusOrder]);
+  }, [openOrder]);
 
-  // Deep-link from bell when landing on /admin?order=<id>
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("order");
     if (!id) return;
     const t = window.setTimeout(() => {
-      void focusOrder(id);
+      void openOrder(id);
     }, 0);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
@@ -191,11 +202,13 @@ export function OrdersDashboard({
       onChange: async (change) => {
         if (change.eventType === "DELETE") {
           setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          if (selectedIdRef.current === change.row.id) setSelectedId(null);
           return;
         }
 
         if (change.row.deleted_at) {
           setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          if (selectedIdRef.current === change.row.id) setSelectedId(null);
           return;
         }
 
@@ -208,6 +221,7 @@ export function OrdersDashboard({
 
         if (!full) {
           setOrders((prev) => prev.filter((o) => o.id !== change.row.id));
+          if (selectedIdRef.current === change.row.id) setSelectedId(null);
           return;
         }
 
@@ -247,8 +261,7 @@ export function OrdersDashboard({
     });
   }, [orders, branchFilter, statusFilter]);
 
-  const selected =
-    filtered.find((o) => o.id === selectedId) ?? filtered[0] ?? null;
+  const selected = filtered.find((o) => o.id === selectedId) ?? null;
   const selectedEvents = selected ? eventsMap[selected.id] ?? [] : [];
 
   async function changeStatus(status: OrderStatus) {
@@ -293,6 +306,7 @@ export function OrdersDashboard({
       return;
     }
     setOrders((prev) => prev.filter((o) => o.id !== selected.id));
+    setSelectedId(null);
     toast.success(
       hasCash
         ? "تم الحذف مع الإبقاء على المبلغ في رصيد الموظف"
@@ -319,7 +333,11 @@ export function OrdersDashboard({
           ? {
               ...o,
               assigned_to: staffId || null,
-              status: staffId ? ("on_the_way" as const) : o.status === "on_the_way" ? ("ready" as const) : o.status,
+              status: staffId
+                ? ("on_the_way" as const)
+                : o.status === "on_the_way"
+                  ? ("ready" as const)
+                  : o.status,
               staff: staffMember
                 ? {
                     user_id: staffMember.user_id,
@@ -364,12 +382,9 @@ export function OrdersDashboard({
     toast.success("تم إلغاء الطلب");
   }
 
-  const subtotal = Number(selected?.subtotal ?? selected?.total ?? 0);
-  const deliveryFee = Number(selected?.delivery_fee ?? 0);
-
   return (
-    <div className="space-y-4">
-      <div className="no-print flex flex-col gap-3 sm:flex-row sm:items-end">
+    <div className="min-w-0 space-y-4 overflow-x-clip">
+      <div className="no-print flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
         <Select
           label="الفرع"
           value={branchFilter}
@@ -396,270 +411,66 @@ export function OrdersDashboard({
       {filtered.length === 0 ? (
         <EmptyState title="لا توجد طلبات" />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-          <ul className="no-print max-h-[70vh] space-y-2 overflow-y-auto">
-            {filtered.map((order) => (
-              <li key={order.id} id={`admin-order-${order.id}`}>
+        <ul className="mx-auto max-w-3xl space-y-2">
+          {filtered.map((order) => {
+            const expanded = selected?.id === order.id;
+            return (
+              <li key={order.id} id={`admin-order-${order.id}`} className="min-w-0">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelectedId(order.id);
-                    void refreshEvents(order.id);
-                  }}
-                  className={`w-full rounded-xl border p-3 text-right transition ${
-                    selected?.id === order.id
+                  aria-expanded={expanded}
+                  onClick={() => toggleOrder(order.id)}
+                  className={cn(
+                    "flex w-full items-start gap-2 rounded-xl border p-3 text-right transition",
+                    expanded
                       ? "border-brand-500 bg-brand-50"
                       : order.status === "new"
-                        ? "border-amber-300 bg-amber-50"
+                        ? "border-amber-300 bg-amber-50 hover:bg-amber-100/70"
                         : "border-stone-200 bg-white hover:bg-stone-50"
-                  }`}
+                  )}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold" dir="ltr">
-                      {order.order_number}
-                    </span>
-                    <StatusBadge status={order.status} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold" dir="ltr">
+                        {order.order_number}
+                      </span>
+                      <StatusBadge status={order.status} />
+                    </div>
+                    <p className="mt-1 text-sm text-stone-700">
+                      {order.customer_name}
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      {formatPrice(Number(order.total))} ·{" "}
+                      {formatDateTimeAr(order.created_at)}
+                    </p>
                   </div>
-                  <p className="mt-1 text-sm text-stone-700">
-                    {order.customer_name}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    {formatPrice(Number(order.total))} ·{" "}
-                    {formatDateTimeAr(order.created_at)}
-                  </p>
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          {selected && (
-            <article
-              id="order-print"
-              className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
-            >
-              <div className="no-print mb-4 flex flex-wrap gap-2">
-                <Select
-                  label="تغيير الحالة"
-                  value={selected.status}
-                  disabled={updating}
-                  onChange={(e) =>
-                    void changeStatus(e.target.value as OrderStatus)
-                  }
-                  options={statusOptions.filter((o) => o.value !== "all")}
-                />
-                <div className="flex flex-wrap items-end gap-2">
-                  <Button
-                    variant="outline"
-                    disabled={updating}
-                    onClick={() => setCancelOpen(true)}
-                  >
-                    إلغاء
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={updating}
-                    onClick={() => void handleSoftDelete()}
-                  >
-                    حذف
-                  </Button>
-                  <Button variant="outline" onClick={() => window.print()}>
-                    <Printer className="h-4 w-4" />
-                    طباعة
-                  </Button>
-                </div>
-              </div>
-
-              {selected.order_type === "delivery" && staffList.length > 0 && (
-                <div className="no-print mb-4">
-                  <Select
-                    label="تعيين موظف"
-                    value={selected.assigned_to ?? ""}
-                    disabled={updating}
-                    onChange={(e) => void handleAssign(e.target.value)}
-                    options={[
-                      { value: "", label: "بدون تعيين" },
-                      ...staffList.map((s) => ({
-                        value: s.user_id,
-                        label: s.full_name,
-                      })),
-                    ]}
+                  <ChevronDown
+                    className={cn(
+                      "mt-1 h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200",
+                      expanded && "rotate-180 text-brand-600"
+                    )}
+                    aria-hidden
                   />
-                </div>
-              )}
+                </button>
 
-              <header className="border-b border-stone-200 pb-3">
-                <h2 className="text-xl font-bold" dir="ltr">
-                  {selected.order_number}
-                </h2>
-                <p className="text-sm text-stone-500">
-                  {selected.branches?.name} ·{" "}
-                  {formatDateTimeAr(selected.created_at)}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={selected.status} />
-                  {selected.staff?.full_name && (
-                    <span className="text-xs text-stone-500">
-                      الموظف: {selected.staff.full_name}
-                    </span>
-                  )}
-                </div>
-              </header>
-
-              <section className="mt-4 space-y-1 text-sm">
-                <p>
-                  <strong>الزبون:</strong> {selected.customer_name}
-                </p>
-                <p>
-                  <strong>الهاتف:</strong>{" "}
-                  <span dir="ltr">{selected.customer_phone}</span>
-                </p>
-                <p>
-                  <strong>النوع:</strong>{" "}
-                  {orderTypeLabels[selected.order_type]}
-                </p>
-                {selected.customer_address && (
-                  <p>
-                    <strong>العنوان:</strong> {selected.customer_address}
-                  </p>
+                {expanded && selected && (
+                  <div className="mt-2 animate-section-rise">
+                    <OrderDetailsPanel
+                      order={selected}
+                      events={selectedEvents}
+                      staffList={staffList}
+                      updating={updating}
+                      onChangeStatus={(s) => void changeStatus(s)}
+                      onCancel={() => setCancelOpen(true)}
+                      onDelete={() => void handleSoftDelete()}
+                      onAssign={(id) => void handleAssign(id)}
+                    />
+                  </div>
                 )}
-                {selected.customer_lat != null &&
-                  selected.customer_lng != null && (
-                    <p>
-                      <strong>الموقع:</strong>{" "}
-                      <CustomerLocationActions
-                        lat={Number(selected.customer_lat)}
-                        lng={Number(selected.customer_lng)}
-                      />
-                    </p>
-                  )}
-                {selected.table_number && (
-                  <p>
-                    <strong>الطاولة:</strong> {selected.table_number}
-                  </p>
-                )}
-                {selected.general_note && (
-                  <p>
-                    <strong>ملاحظة عامة:</strong> {selected.general_note}
-                  </p>
-                )}
-                {selected.status === "delivered" &&
-                  selected.collected_amount != null && (
-                    <p className="text-emerald-800">
-                      <strong>المبلغ المحصّل:</strong>{" "}
-                      {formatPrice(Number(selected.collected_amount))}
-                    </p>
-                  )}
-                {(() => {
-                  const deliveryEv = selectedEvents.find(
-                    (ev) =>
-                      ev.event === "delivered" &&
-                      ev.meta &&
-                      typeof ev.meta === "object" &&
-                      ev.meta.note
-                  );
-                  const note =
-                    deliveryEv &&
-                    typeof deliveryEv.meta.note === "string"
-                      ? deliveryEv.meta.note
-                      : null;
-                  if (!note) return null;
-                  return (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-950">
-                      <strong>ملاحظة التسليم:</strong> {note}
-                    </p>
-                  );
-                })()}
-                {selected.cancel_reason && (
-                  <p className="text-red-700">
-                    <strong>سبب الإلغاء:</strong> {selected.cancel_reason}
-                  </p>
-                )}
-              </section>
-
-              <section className="mt-4">
-                <h3 className="mb-2 font-semibold">الأصناف</h3>
-                <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
-                  {selected.order_items?.map((item) => (
-                    <li key={item.id} className="px-3 py-2 text-sm">
-                      <div className="flex justify-between gap-2">
-                        <span>
-                          {item.name_snapshot} × {item.quantity}
-                        </span>
-                        <span className="font-medium">
-                          {formatPrice(
-                            Number(item.price_snapshot) * item.quantity
-                          )}
-                        </span>
-                      </div>
-                      {item.note && (
-                        <p className="mt-0.5 text-xs text-amber-800">
-                          ملاحظة: {item.note}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-3 space-y-1 text-sm" dir="ltr">
-                  <p className="flex justify-between">
-                    <span>المجموع الفرعي</span>
-                    <span>{formatPrice(subtotal)}</span>
-                  </p>
-                  <p className="flex justify-between">
-                    <span>رسوم التوصيل</span>
-                    <span>{formatPrice(deliveryFee)}</span>
-                  </p>
-                  <p className="flex justify-between text-lg font-bold">
-                    <span>المجموع</span>
-                    <span>{formatPrice(Number(selected.total))}</span>
-                  </p>
-                </div>
-                <p className="text-sm text-emerald-700">
-                  الدفع: نقداً عند الاستلام
-                </p>
-              </section>
-
-              {selectedEvents.length > 0 && (
-                <section className="no-print mt-4">
-                  <h3 className="mb-2 font-semibold">الخط الزمني</h3>
-                  <ul className="max-h-48 space-y-2 overflow-y-auto text-xs text-stone-600">
-                    {selectedEvents.map((ev) => {
-                      const meta =
-                        ev.meta && typeof ev.meta === "object"
-                          ? (ev.meta as Record<string, unknown>)
-                          : null;
-                      const note =
-                        typeof meta?.note === "string" ? meta.note : null;
-                      const collected =
-                        typeof meta?.collected_amount === "number"
-                          ? meta.collected_amount
-                          : null;
-                      return (
-                        <li key={ev.id} className="border-b border-stone-100 pb-1.5 last:border-0">
-                          <div>
-                            {formatDateTimeAr(ev.created_at)} — {ev.event}
-                            {ev.to_status
-                              ? ` → ${ORDER_STATUS_LABELS[ev.to_status as OrderStatus] ?? ev.to_status}`
-                              : ""}
-                          </div>
-                          {collected != null && (
-                            <div className="mt-0.5 text-emerald-700">
-                              محصّل: {formatPrice(collected)}
-                            </div>
-                          )}
-                          {note && (
-                            <div className="mt-0.5 text-amber-900">
-                              ملاحظة: {note}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              )}
-            </article>
-          )}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       <Modal
@@ -699,5 +510,237 @@ export function OrdersDashboard({
         </div>
       </Modal>
     </div>
+  );
+}
+
+function OrderDetailsPanel({
+  order,
+  events,
+  staffList,
+  updating,
+  onChangeStatus,
+  onCancel,
+  onDelete,
+  onAssign,
+}: {
+  order: OrderWithItems;
+  events: OrderEvent[];
+  staffList: Staff[];
+  updating: boolean;
+  onChangeStatus: (status: OrderStatus) => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  onAssign: (staffId: string) => void;
+}) {
+  const subtotal = Number(order.subtotal ?? order.total ?? 0);
+  const deliveryFee = Number(order.delivery_fee ?? 0);
+
+  return (
+    <article
+      id="order-print"
+      className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+    >
+      <div className="no-print mb-4 flex flex-wrap gap-2">
+        <Select
+          label="تغيير الحالة"
+          value={order.status}
+          disabled={updating}
+          onChange={(e) => onChangeStatus(e.target.value as OrderStatus)}
+          options={statusOptions.filter((o) => o.value !== "all")}
+        />
+        <div className="flex flex-wrap items-end gap-2">
+          <Button variant="outline" disabled={updating} onClick={onCancel}>
+            إلغاء
+          </Button>
+          <Button variant="ghost" disabled={updating} onClick={onDelete}>
+            حذف
+          </Button>
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="h-4 w-4" />
+            طباعة
+          </Button>
+        </div>
+      </div>
+
+      {order.order_type === "delivery" && staffList.length > 0 && (
+        <div className="no-print mb-4">
+          <Select
+            label="تعيين موظف"
+            value={order.assigned_to ?? ""}
+            disabled={updating}
+            onChange={(e) => onAssign(e.target.value)}
+            options={[
+              { value: "", label: "بدون تعيين" },
+              ...staffList.map((s) => ({
+                value: s.user_id,
+                label: s.full_name,
+              })),
+            ]}
+          />
+        </div>
+      )}
+
+      <header className="border-b border-stone-200 pb-3">
+        <h2 className="text-xl font-bold" dir="ltr">
+          {order.order_number}
+        </h2>
+        <p className="text-sm text-stone-500">
+          {order.branches?.name} · {formatDateTimeAr(order.created_at)}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <StatusBadge status={order.status} />
+          {order.staff?.full_name && (
+            <span className="text-xs text-stone-500">
+              الموظف: {order.staff.full_name}
+            </span>
+          )}
+        </div>
+      </header>
+
+      <section className="mt-4 space-y-1 text-sm">
+        <p>
+          <strong>الزبون:</strong> {order.customer_name}
+        </p>
+        <p>
+          <strong>الهاتف:</strong>{" "}
+          <span dir="ltr">{order.customer_phone}</span>
+        </p>
+        <p>
+          <strong>النوع:</strong> {orderTypeLabels[order.order_type]}
+        </p>
+        {order.customer_address && (
+          <p>
+            <strong>العنوان:</strong> {order.customer_address}
+          </p>
+        )}
+        {order.customer_lat != null && order.customer_lng != null && (
+          <p>
+            <strong>الموقع:</strong>{" "}
+            <CustomerLocationActions
+              lat={Number(order.customer_lat)}
+              lng={Number(order.customer_lng)}
+            />
+          </p>
+        )}
+        {order.table_number && (
+          <p>
+            <strong>الطاولة:</strong> {order.table_number}
+          </p>
+        )}
+        {order.general_note && (
+          <p>
+            <strong>ملاحظة عامة:</strong> {order.general_note}
+          </p>
+        )}
+        {order.status === "delivered" && order.collected_amount != null && (
+          <p className="text-emerald-800">
+            <strong>المبلغ المحصّل:</strong>{" "}
+            {formatPrice(Number(order.collected_amount))}
+          </p>
+        )}
+        {(() => {
+          const deliveryEv = events.find(
+            (ev) =>
+              ev.event === "delivered" &&
+              ev.meta &&
+              typeof ev.meta === "object" &&
+              ev.meta.note
+          );
+          const note =
+            deliveryEv && typeof deliveryEv.meta.note === "string"
+              ? deliveryEv.meta.note
+              : null;
+          if (!note) return null;
+          return (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-950">
+              <strong>ملاحظة التسليم:</strong> {note}
+            </p>
+          );
+        })()}
+        {order.cancel_reason && (
+          <p className="text-red-700">
+            <strong>سبب الإلغاء:</strong> {order.cancel_reason}
+          </p>
+        )}
+      </section>
+
+      <section className="mt-4">
+        <h3 className="mb-2 font-semibold">الأصناف</h3>
+        <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
+          {order.order_items?.map((item) => (
+            <li key={item.id} className="px-3 py-2 text-sm">
+              <div className="flex justify-between gap-2">
+                <span>
+                  {item.name_snapshot} × {item.quantity}
+                </span>
+                <span className="font-medium">
+                  {formatPrice(Number(item.price_snapshot) * item.quantity)}
+                </span>
+              </div>
+              {item.note && (
+                <p className="mt-0.5 text-xs text-amber-800">
+                  ملاحظة: {item.note}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 space-y-1 text-sm" dir="ltr">
+          <p className="flex justify-between">
+            <span>المجموع الفرعي</span>
+            <span>{formatPrice(subtotal)}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>رسوم التوصيل</span>
+            <span>{formatPrice(deliveryFee)}</span>
+          </p>
+          <p className="flex justify-between text-lg font-bold">
+            <span>المجموع</span>
+            <span>{formatPrice(Number(order.total))}</span>
+          </p>
+        </div>
+        <p className="text-sm text-emerald-700">الدفع: نقداً عند الاستلام</p>
+      </section>
+
+      {events.length > 0 && (
+        <section className="no-print mt-4">
+          <h3 className="mb-2 font-semibold">الخط الزمني</h3>
+          <ul className="max-h-48 space-y-2 overflow-y-auto text-xs text-stone-600">
+            {events.map((ev) => {
+              const meta =
+                ev.meta && typeof ev.meta === "object"
+                  ? (ev.meta as Record<string, unknown>)
+                  : null;
+              const note = typeof meta?.note === "string" ? meta.note : null;
+              const collected =
+                typeof meta?.collected_amount === "number"
+                  ? meta.collected_amount
+                  : null;
+              return (
+                <li
+                  key={ev.id}
+                  className="border-b border-stone-100 pb-1.5 last:border-0"
+                >
+                  <div>
+                    {formatDateTimeAr(ev.created_at)} — {ev.event}
+                    {ev.to_status
+                      ? ` → ${ORDER_STATUS_LABELS[ev.to_status as OrderStatus] ?? ev.to_status}`
+                      : ""}
+                  </div>
+                  {collected != null && (
+                    <div className="mt-0.5 text-emerald-700">
+                      محصّل: {formatPrice(collected)}
+                    </div>
+                  )}
+                  {note && (
+                    <div className="mt-0.5 text-amber-900">ملاحظة: {note}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </article>
   );
 }
