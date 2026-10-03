@@ -2,11 +2,17 @@ import { createClient } from "@/supabase/server";
 import { HomeHero } from "@/components/site/HomeHero";
 import { HomeHeader } from "@/components/site/HomeHeader";
 import { HomeCategories } from "@/components/site/HomeCategories";
+import { HomeFeatured } from "@/components/site/HomeFeatured";
 import { HomeLocations } from "@/components/site/HomeLocations";
 import { HomeOrderTrack } from "@/components/site/HomeOrderTrack";
 import { HomeFooter } from "@/components/site/HomeFooter";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getBranchStatus } from "@/lib/opening-hours";
+import {
+  getFeaturedSettings,
+  resolveFeaturedMeals,
+  type FeaturedMeal,
+} from "@/lib/featured-items";
 import { getDictionary } from "@/lib/i18n";
 import type { Branch, Category, Item } from "@/types/database";
 import type { Metadata } from "next";
@@ -79,6 +85,7 @@ export default async function HomePage() {
 
   let categories: Category[] = [];
   let searchItems: HomeSearchItem[] = [];
+  let featuredMeals: FeaturedMeal[] = [];
 
   if (branchIds.length > 0) {
     const { data: catsData } = await supabase
@@ -122,6 +129,18 @@ export default async function HomePage() {
           },
         ];
       });
+
+      const settings = await getFeaturedSettings(supabase);
+      const candidates: FeaturedMeal[] = searchItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        imageUrl: item.imageUrl,
+        branchSlug: item.branchSlug,
+        branchName: item.branchName,
+      }));
+      featuredMeals = resolveFeaturedMeals(candidates, settings);
     }
   }
 
@@ -138,6 +157,8 @@ export default async function HomePage() {
       />
 
       <HomeHero />
+
+      <HomeFeatured meals={featuredMeals} />
 
       <HomeCategories categories={uniqueCats} />
 

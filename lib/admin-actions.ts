@@ -12,6 +12,11 @@ import {
 import { checkLoginRateLimit } from "@/lib/rate-limit";
 import { isAllowedImageUrl, isAllowedMapUrl } from "@/lib/security";
 import { requireAdmin as requireAdminAuth } from "@/lib/auth-guards";
+import {
+  FEATURED_SETTINGS_KEY,
+  MAX_FEATURED_COUNT,
+  normalizeFeaturedSettings,
+} from "@/lib/featured-items";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -573,5 +578,60 @@ export async function reorderEntity(
   }
 
   revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function saveFeaturedMealsAction(input: {
+  display_count: number;
+  item_ids: string[];
+}): Promise<ActionResult> {
+  const supabase = await requireAdmin();
+
+  const parsed = normalizeFeaturedSettings({
+    display_count: input.display_count,
+    item_ids: input.item_ids,
+  });
+
+  if (parsed.display_count > MAX_FEATURED_COUNT) {
+    return { error: "عدد الصور أكبر من المسموح" };
+  }
+
+  if (parsed.item_ids.length > 100) {
+    return { error: "عدد الوجبات المحددة كبير جداً" };
+  }
+
+  if (parsed.item_ids.length > 0) {
+    const uniqueIds = [...new Set(parsed.item_ids)];
+    const { data: existing, error: itemsError } = await supabase
+      .from("items")
+      .select("id")
+      .in("id", uniqueIds);
+
+    if (itemsError) return { error: "تعذّر التحقق من الوجبات" };
+    const ok = new Set((existing ?? []).map((r) => r.id));
+    if (uniqueIds.some((id) => !ok.has(id))) {
+      return { error: "بعض الوجبات المحددة غير موجودة" };
+    }
+    parsed.item_ids = uniqueIds.filter((id) => ok.has(id));
+  }
+
+  const value: Database["public"]["Tables"]["site_settings"]["Row"]["value"] = {
+    display_count: parsed.display_count,
+    item_ids: parsed.item_ids,
+  };
+
+  const { error } = await supabase.from("site_settings").upsert(
+    {
+      key: FEATURED_SETTINGS_KEY,
+      value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) return { error: "فشل حفظ الإعدادات" };
+
+  revalidatePath("/");
+  revalidatePath("/admin/featured");
   return { success: true };
 }

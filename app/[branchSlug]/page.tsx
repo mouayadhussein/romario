@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/supabase/server";
 import { CartProvider } from "@/lib/cart";
-import { SiteHeader } from "@/components/site/SiteHeader";
 import { BranchMenu } from "@/components/site/BranchMenu";
 import type { Branch, Category, Item, CategoryWithItems } from "@/types/database";
 
@@ -79,8 +78,7 @@ export default async function BranchPage({
 
   return (
     <CartProvider branchSlug={branchSlug}>
-      <SiteHeader branchName={data.branch.name} branchSlug={branchSlug} showCart />
-      <main className="mx-auto max-w-3xl px-4 py-4 pb-20">
+      <main>
         <BranchMenu branch={data.branch} categories={data.categories} />
       </main>
     </CartProvider>

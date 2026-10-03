@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MapPin, Phone, ExternalLink, MessageCircle } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { AlignJustify, LayoutGrid, Rows3 } from "lucide-react";
+import { BranchHero } from "./BranchHero";
 import { CategoryTabs } from "./CategoryTabs";
 import { SearchBar } from "./SearchBar";
-import { ItemCard } from "./ItemCard";
-import { BranchOpenBadge, BranchWeeklyHours } from "./BranchHours";
+import { ItemCard, type ItemViewMode } from "./ItemCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getDictionary } from "@/lib/i18n";
 import { getBranchStatus } from "@/lib/opening-hours";
-import { normalizeWhatsappNumber } from "@/lib/whatsapp";
+import { cn } from "@/lib/utils";
 import type { Branch, CategoryWithItems } from "@/types/database";
 
 const t = getDictionary("ar").site;
@@ -23,8 +23,15 @@ export function BranchMenu({
 }) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [viewMode, setViewMode] = useState<ItemViewMode>("cards");
+
   const status = useMemo(() => getBranchStatus(branch), [branch]);
   const orderingDisabled = !status.isOpen;
+
+  const cuisineLine = useMemo(
+    () => categories.map((c) => c.name).filter(Boolean).slice(0, 5).join("، "),
+    [categories]
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -43,102 +50,150 @@ export function BranchMenu({
       .filter((c) => c.items.length > 0);
   }, [categories, activeCategory, query]);
 
+  const activeCatMeta = useMemo(() => {
+    if (activeCategory) {
+      const cat = categories.find((c) => c.id === activeCategory);
+      if (cat) {
+        const count =
+          filtered.find((c) => c.id === cat.id)?.items.length ?? cat.items.length;
+        return { name: cat.name, count, image_url: cat.image_url };
+      }
+    }
+    const count = filtered.reduce((sum, c) => sum + c.items.length, 0);
+    return { name: "القائمة", count, image_url: null as string | null };
+  }, [activeCategory, categories, filtered]);
+
   return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-stone-200 bg-white px-3.5 py-3 shadow-sm">
-        <div className="flex items-start justify-between gap-2">
-          <h1 className="text-xl font-bold leading-tight text-stone-900">
-            {branch.name}
-          </h1>
-          <BranchOpenBadge branch={branch} compact />
-        </div>
-
-        {(branch.address || branch.phone) && (
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
-            {branch.address && (
-              <p className="inline-flex min-w-0 items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-                <span className="truncate">{branch.address}</span>
-              </p>
-            )}
-            {branch.phone && (
-              <a
-                href={`tel:${branch.phone}`}
-                className="inline-flex items-center gap-1.5 hover:text-brand-700"
-              >
-                <Phone className="h-3.5 w-3.5 shrink-0 text-brand-600" />
-                <span dir="ltr">{branch.phone}</span>
-              </a>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2">
-          <BranchWeeklyHours branch={branch} compact />
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {normalizeWhatsappNumber(branch.whatsapp_number) && (
-            <a
-              href={`https://wa.me/${normalizeWhatsappNumber(branch.whatsapp_number)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-800 hover:bg-green-200"
-            >
-              <MessageCircle className="h-3 w-3" />
-              {t.whatsapp}
-            </a>
-          )}
-          {branch.map_url && (
-            <a
-              href={branch.map_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-200"
-            >
-              <ExternalLink className="h-3 w-3" />
-              {t.map}
-            </a>
-          )}
-        </div>
-      </section>
-
-      {orderingDisabled && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          الفرع مغلق حالياً. يمكنك تصفّح القائمة، لكن لا يمكن إضافة وجبات أو إرسال
-          طلب حتى يفتح الفرع.
-          {status.reason ? ` (${status.reason})` : null}
-        </div>
-      )}
-
-      <SearchBar value={query} onChange={setQuery} placeholder={t.searchMenu} />
+    <div className="min-h-screen bg-[#f3f3f3]">
+      <BranchHero branch={branch} cuisineLine={cuisineLine || undefined} />
 
       <CategoryTabs
-        categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        categories={categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          image_url: c.image_url,
+        }))}
         activeId={activeCategory}
         onChange={setActiveCategory}
       />
 
-      {filtered.length === 0 ? (
-        <EmptyState title={t.noResults || "لا توجد أصناف"} />
-      ) : (
-        <div className="space-y-6">
-          {filtered.map((cat) => (
-            <section key={cat.id} id={`cat-${cat.id}`}>
-              <h2 className="mb-3 text-lg font-bold text-stone-800">{cat.name}</h2>
-              <div className="space-y-3">
-                {cat.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    orderingDisabled={orderingDisabled}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+      <div className="mx-auto max-w-3xl px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
+        {orderingDisabled && (
+          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            الفرع مغلق حالياً. يمكنك تصفّح القائمة، لكن لا يمكن إضافة وجبات أو إرسال
+            طلب حتى يفتح الفرع.
+            {status.reason ? ` (${status.reason})` : null}
+          </div>
+        )}
+
+        <div className="mb-3">
+          <SearchBar value={query} onChange={setQuery} placeholder={t.searchMenu} />
         </div>
-      )}
+
+        {/* Section header: title+count (RTL start/right) · view toggles (left) */}
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-bold text-stone-900 sm:text-lg">
+              {activeCatMeta.name}
+              <span className="ms-1.5 font-semibold text-stone-400">
+                ({activeCatMeta.count})
+              </span>
+            </h2>
+          </div>
+
+          <div
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-stone-200 bg-white p-0.5 shadow-sm"
+            role="group"
+            aria-label="طريقة العرض"
+          >
+            <ViewToggle
+              label="عرض بطاقات"
+              active={viewMode === "cards"}
+              onClick={() => setViewMode("cards")}
+            >
+              <AlignJustify className="h-4 w-4" />
+            </ViewToggle>
+            <ViewToggle
+              label="عرض قائمة"
+              active={viewMode === "list"}
+              onClick={() => setViewMode("list")}
+            >
+              <Rows3 className="h-4 w-4" />
+            </ViewToggle>
+            <ViewToggle
+              label="عرض شبكة"
+              active={viewMode === "grid"}
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </ViewToggle>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <EmptyState title={t.noResults || "لا توجد أصناف"} />
+        ) : (
+          <div className="space-y-7">
+            {filtered.map((cat) => (
+              <section key={cat.id} id={`cat-${cat.id}`}>
+                {activeCategory === null && (
+                  <h3 className="mb-3 text-base font-bold text-stone-800 sm:text-lg">
+                    {cat.name}
+                    <span className="ms-1.5 text-sm font-semibold text-stone-400">
+                      ({cat.items.length})
+                    </span>
+                  </h3>
+                )}
+                <div
+                  className={cn(
+                    viewMode === "grid"
+                      ? "grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-3"
+                      : "space-y-3 sm:space-y-4"
+                  )}
+                >
+                  {cat.items.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      orderingDisabled={orderingDisabled}
+                      viewMode={viewMode}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function ViewToggle({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-md transition",
+        active
+          ? "bg-stone-900 text-white"
+          : "text-stone-500 hover:bg-stone-100 hover:text-stone-800"
+      )}
+    >
+      {children}
+    </button>
   );
 }

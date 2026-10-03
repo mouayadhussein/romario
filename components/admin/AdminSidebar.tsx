@@ -10,6 +10,7 @@ import {
   Users,
   Wallet,
   Trash2,
+  Star,
 } from "lucide-react";
 import { logoutAction } from "@/lib/admin-actions";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 const links = [
   { href: "/admin", label: "الطلبات", icon: LayoutDashboard },
   { href: "/admin/branches", label: "الفروع والأصناف", icon: Store },
+  { href: "/admin/featured", label: "الوجبات المميزة", icon: Star },
   { href: "/admin/staff", label: "الموظفون", icon: Users },
   { href: "/admin/cash", label: "تسوية النقد", icon: Wallet },
   { href: "/admin/trash", label: "المحذوفات", icon: Trash2 },
