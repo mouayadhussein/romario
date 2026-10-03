@@ -98,11 +98,15 @@ function CategoryTile({ category }: { category: HomeSearchCategory }) {
       <span className="line-clamp-2 text-center text-sm font-bold text-stone-800">
         {category.name}
       </span>
-      <span className="inline-flex items-center gap-0.5 text-[11px] text-stone-500">
-        {single ? "فرع واحد" : `${category.branches.length} فروع`}
+      <span className="inline-flex max-w-full items-center gap-0.5 text-[11px] text-stone-500">
+        <span className="truncate">
+          {single && onlyBranch
+            ? onlyBranch.name
+            : `${category.branches.length} فروع`}
+        </span>
         {!single && (
           <ChevronDown
-            className={`h-3 w-3 transition-transform duration-200 ${
+            className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
               open ? "rotate-180" : ""
             }`}
           />
