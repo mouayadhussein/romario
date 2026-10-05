@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/google.maps": "^3.66.4",
+    "@types/google.maps": "^3.66.5",
     "@types/node": "^20",
     "@types/qrcode.react": "^1.0.5",
     "@types/react": "^19",
