@@ -4,15 +4,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import { config } from "@/lib/config";
+import { DEFAULT_HERO_IMAGE } from "@/lib/hero-image";
 
-export function HomeHero() {
+export function HomeHero({
+  imageSrc = DEFAULT_HERO_IMAGE,
+}: {
+  imageSrc?: string;
+}) {
   return (
     <section
       id="home"
       className="relative isolate mx-3 mt-3 min-h-[34vh] overflow-hidden rounded-[1.75rem] bg-brand-900 text-white sm:mx-4 sm:rounded-[2rem] md:min-h-[70vh] lg:min-h-[75vh]"
     >
       <Image
-        src="/images/hero-banner.png"
+        src={imageSrc}
         alt=""
         fill
         priority

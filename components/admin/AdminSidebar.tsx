@@ -22,7 +22,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 const links = [
   { href: "/admin", label: "الطلبات", icon: LayoutDashboard },
   { href: "/admin/branches", label: "الفروع والأصناف", icon: Store },
-  { href: "/admin/featured", label: "الوجبات المميزة", icon: Star },
+  { href: "/admin/featured", label: "الصفحة الرئيسية", icon: Star },
   { href: "/admin/staff", label: "الموظفون", icon: Users },
   { href: "/admin/cash", label: "تسوية النقد", icon: Wallet },
   { href: "/admin/trash", label: "المحذوفات", icon: Trash2 },

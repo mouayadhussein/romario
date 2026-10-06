@@ -17,6 +17,10 @@ import {
   MAX_FEATURED_COUNT,
   normalizeFeaturedSettings,
 } from "@/lib/featured-items";
+import {
+  HERO_SETTINGS_KEY,
+  normalizeHeroSettings,
+} from "@/lib/hero-image";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -630,6 +634,37 @@ export async function saveFeaturedMealsAction(input: {
   );
 
   if (error) return { error: "فشل حفظ الإعدادات" };
+
+  revalidatePath("/");
+  revalidatePath("/admin/featured");
+  return { success: true };
+}
+
+export async function saveHeroImageAction(input: {
+  image_url: string | null;
+}): Promise<ActionResult> {
+  const supabase = await requireAdmin();
+
+  const parsed = normalizeHeroSettings({ image_url: input.image_url });
+
+  if (parsed.image_url && !isAllowedImageUrl(parsed.image_url)) {
+    return { error: "رابط الصورة غير مسموح" };
+  }
+
+  const value: Database["public"]["Tables"]["site_settings"]["Row"]["value"] = {
+    image_url: parsed.image_url,
+  };
+
+  const { error } = await supabase.from("site_settings").upsert(
+    {
+      key: HERO_SETTINGS_KEY,
+      value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) return { error: "فشل حفظ صورة الصفحة الرئيسية" };
 
   revalidatePath("/");
   revalidatePath("/admin/featured");

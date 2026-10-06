@@ -3,14 +3,19 @@ import {
   FeaturedMealsManager,
   type AdminMealOption,
 } from "@/components/admin/FeaturedMealsManager";
+import { HeroImageManager } from "@/components/admin/HeroImageManager";
 import { getFeaturedSettings } from "@/lib/featured-items";
+import { getHeroSettings } from "@/lib/hero-image";
 import type { Branch, Category, Item } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminFeaturedPage() {
   const supabase = await createClient();
-  const settings = await getFeaturedSettings(supabase);
+  const [settings, heroSettings] = await Promise.all([
+    getFeaturedSettings(supabase),
+    getHeroSettings(supabase),
+  ]);
 
   const { data: branchesData } = await supabase
     .from("branches")
@@ -72,7 +77,8 @@ export default async function AdminFeaturedPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+      <HeroImageManager initialImageUrl={heroSettings.image_url} />
       <FeaturedMealsManager initialSettings={settings} meals={meals} />
     </div>
   );

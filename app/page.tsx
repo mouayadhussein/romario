@@ -13,6 +13,7 @@ import {
   resolveFeaturedMeals,
   type FeaturedMeal,
 } from "@/lib/featured-items";
+import { getHeroSettings, resolveHeroImageUrl } from "@/lib/hero-image";
 import { getDictionary } from "@/lib/i18n";
 import type { Branch, Category, Item } from "@/types/database";
 import type { Metadata } from "next";
@@ -82,6 +83,9 @@ export default async function HomePage() {
   const branches = (data ?? []) as Branch[];
   const branchIds = branches.map((b) => b.id);
   const branchById = new Map(branches.map((b) => [b.id, b]));
+
+  const heroSettings = await getHeroSettings(supabase);
+  const heroImageSrc = resolveHeroImageUrl(heroSettings);
 
   let categories: Category[] = [];
   let searchItems: HomeSearchItem[] = [];
@@ -156,7 +160,7 @@ export default async function HomePage() {
         activeSection="home"
       />
 
-      <HomeHero />
+      <HomeHero imageSrc={heroImageSrc} />
 
       <HomeFeatured meals={featuredMeals} />
 
