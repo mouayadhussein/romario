@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { BranchOpenBadge } from "./BranchHours";
 import { LocationPickerModal } from "./LocationPickerModal";
 import { formatPrice } from "@/lib/utils";
@@ -22,7 +23,6 @@ import {
   roundLatLng,
   type LatLng,
 } from "@/lib/google-maps";
-import { buildWhatsAppMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import { calculateOrderFees } from "@/lib/order-fees";
 import type { Branch, OrderType } from "@/types/database";
 import Link from "next/link";
@@ -34,6 +34,7 @@ export function CartCheckout({ branch }: { branch: Branch }) {
   const { items, updateQuantity, updateNote, removeItem, clearCart, total } =
     useCart();
   const [loading, setLoading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [location, setLocation] = useState<LatLng | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -134,17 +135,16 @@ export function CartCheckout({ branch }: { branch: Branch }) {
     );
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function validateBeforeSubmit(): boolean {
     if (orderingDisabled) {
       toast.error(status.reason || "الفرع مغلق حالياً ولا يمكن إرسال الطلب");
-      return;
+      return false;
     }
     if (belowMin) {
       toast.error(
         `الحد الأدنى للطلب ${formatPrice(minOrderAmount)}. ينقصك ${formatPrice(fees.minOrderShortfall)}.`
       );
-      return;
+      return false;
     }
     setErrors({});
 
@@ -155,10 +155,27 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         const msg = t.deliveryLocationRequired;
         setErrors({ customerAddress: msg });
         toast.error(msg);
-        return;
+        return false;
       }
     }
 
+    return true;
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validateBeforeSubmit()) return;
+
+    // Delivery: confirm paid delivery notice before sending
+    if (orderType === "delivery") {
+      setConfirmOpen(true);
+      return;
+    }
+
+    void submitOrder();
+  }
+
+  async function submitOrder() {
     setLoading(true);
 
     const deliveryLocation =
@@ -203,12 +220,6 @@ export function CartCheckout({ branch }: { branch: Branch }) {
         subtotal?: number;
         deliveryFee?: number;
         total?: number;
-        orderItems?: {
-          name: string;
-          quantity: number;
-          price: number;
-          note: string | null;
-        }[];
       };
 
       if (!res.ok) {
@@ -222,45 +233,9 @@ export function CartCheckout({ branch }: { branch: Branch }) {
 
       const orderNumber = data.orderNumber!;
       const trackingToken = data.trackingToken;
-      const orderItems =
-        data.orderItems ??
-        items.map((i) => ({
-          name: i.name,
-          quantity: i.quantity,
-          price: i.price,
-          note: i.note || null,
-        }));
-      const orderTotal = data.total ?? fees.total;
-      const siteOrigin =
-        typeof window !== "undefined" ? window.location.origin : "";
-      const trackingUrl =
-        trackingToken && siteOrigin
-          ? `${siteOrigin}/order/${trackingToken}`
-          : null;
 
       clearCart();
-
-      if (branch.whatsapp_number) {
-        const message = buildWhatsAppMessage({
-          orderNumber,
-          customerName: form.customerName,
-          customerPhone: form.customerPhone,
-          customerAddress: form.customerAddress,
-          customerLat: deliveryLocation.customerLat,
-          customerLng: deliveryLocation.customerLng,
-          orderType,
-          tableNumber: form.tableNumber,
-          generalNote: form.generalNote,
-          items: orderItems,
-          subtotal: data.subtotal ?? fees.subtotal,
-          deliveryFee: data.deliveryFee ?? fees.deliveryFee,
-          total: orderTotal,
-          trackingUrl,
-          branchName: branch.name,
-        });
-        const url = buildWhatsAppUrl(branch.whatsapp_number, message);
-        if (url) window.open(url, "_blank", "noopener,noreferrer");
-      }
+      setConfirmOpen(false);
 
       const confirmQs = new URLSearchParams({
         order: orderNumber,
@@ -590,6 +565,22 @@ export function CartCheckout({ branch }: { branch: Branch }) {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => {
+          if (loading) return;
+          setConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          void submitOrder();
+        }}
+        title={t.deliveryPaidConfirmTitle}
+        message={t.deliveryPaidConfirmMessage}
+        confirmLabel={t.deliveryPaidConfirmOk}
+        danger={false}
+        loading={loading}
+      />
     </div>
   );
 }
