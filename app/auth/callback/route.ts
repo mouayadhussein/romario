@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/supabase/server";
 
+
 function safeAdminNext(nextParam: string | null): string {
   if (nextParam && nextParam.startsWith("/admin/")) return nextParam;
   return "/admin/login";
