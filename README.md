@@ -92,7 +92,7 @@ INSERT INTO admins (user_id) VALUES ('PASTE-USER-UUID-HERE');
 
 3. سجّل الدخول عبر `/admin/login` (المستخدم يجب أن يكون في جدول `admins` وإلا لن تمر سياسات RLS)
 
-**إعادة تعيين كلمة مرور المدير:** من `/admin/login` → «نسيت كلمة المرور؟». في Supabase → Authentication → URL Configuration أضف إلى **Redirect URLs** مسار `/auth/callback` (مثال إنتاج: `https://your-domain.vercel.app/auth/callback`) وتأكد أن **Site URL** و`NEXT_PUBLIC_SITE_URL` يطابقان نطاق الإنتاج.
+**إعادة تعيين كلمة مرور المدير:** من `/admin/login` → «نسيت كلمة المرور؟». **مهم:** في Supabase → Authentication → URL Configuration غيّر **Site URL** من `http://localhost:3000` إلى رابط الإنتاج (مثال `https://dibo-restaurant.vercel.app`) — وإلا رابط الإيميل يفتح localhost على الجوال. أضف **Redirect URLs:** `https://your-domain.vercel.app/auth/callback`. على Vercel عيّن `NEXT_PUBLIC_SITE_URL` لنفس النطاق.
 
 ### 7) التشغيل محلياً
 

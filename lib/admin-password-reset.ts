@@ -4,18 +4,12 @@ import { headers } from "next/headers";
 import { createClient } from "@/supabase/server";
 import { createServiceClient } from "@/supabase/admin";
 import { checkLoginRateLimit } from "@/lib/rate-limit";
-import { getEnv } from "@/lib/env";
+import { resolveSiteOrigin } from "@/lib/site-origin";
 
 type ActionResult = { error?: string; success?: boolean; message?: string };
 
 const GENERIC_SENT =
   "إذا كان البريد مسجّلاً لحساب مدير، ستصلك رسالة خلال دقائق لتعيين كلمة مرور جديدة.";
-
-function siteOrigin(): string {
-  const url = getEnv().NEXT_PUBLIC_SITE_URL;
-  if (url) return url.replace(/\/$/, "");
-  return "http://localhost:3000";
-}
 
 async function clientIp(): Promise<string> {
   const h = await headers();
@@ -60,7 +54,8 @@ export async function requestAdminPasswordResetAction(
   const adminId = await adminUserIdForEmail(email);
   if (adminId) {
     const supabase = await createClient();
-    const redirectTo = `${siteOrigin()}/auth/callback?next=${encodeURIComponent("/admin/reset-password")}`;
+    const origin = await resolveSiteOrigin();
+    const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/admin/reset-password")}`;
     await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   }
 
