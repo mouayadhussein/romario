@@ -41,6 +41,10 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAdminLogin = pathname === "/admin/login";
+  const isAdminForgotPassword = pathname === "/admin/forgot-password";
+  const isAdminResetPassword = pathname === "/admin/reset-password";
+  const isAdminPublicAuth =
+    isAdminLogin || isAdminForgotPassword || isAdminResetPassword;
   const isStaffLogin = pathname === "/staff/login";
   const isMfaVerify = pathname === "/admin/mfa/verify";
   const isMfaSetup = pathname === "/admin/mfa/setup";
@@ -107,11 +111,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ---------- Admin routes ----------
-  if (isAdminRoute && !isAdminLogin && !user) {
+  if (isAdminRoute && !isAdminPublicAuth && !user) {
     return redirectTo("/admin/login");
   }
 
-  if (user && isAdminRoute && !isAdminLogin) {
+  if (user && isAdminRoute && !isAdminPublicAuth) {
     const { data: isAdmin } = await supabase.rpc("is_admin");
     if (!isAdmin) {
       const { data: isStaff } = await supabase.rpc("is_staff");
@@ -127,7 +131,7 @@ export async function updateSession(request: NextRequest) {
     const needsMfa =
       aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2";
 
-    if (needsMfa && !isMfaVerify) {
+    if (needsMfa && !isMfaVerify && !isAdminResetPassword) {
       return redirectTo("/admin/mfa/verify");
     }
 
@@ -136,7 +140,7 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  if (isAdminLogin && user) {
+  if (isAdminPublicAuth && user && !isAdminResetPassword) {
     const { data: isAdmin } = await supabase.rpc("is_admin");
     if (isAdmin) {
       const { data: aal } =

@@ -6,7 +6,10 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const bare =
-    pathname === "/admin/login" || pathname === "/admin/mfa/verify";
+    pathname === "/admin/login" ||
+    pathname === "/admin/forgot-password" ||
+    pathname === "/admin/reset-password" ||
+    pathname === "/admin/mfa/verify";
 
   if (bare) {
     return (

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -57,6 +58,14 @@ export default function AdminLoginPage() {
           dir="ltr"
           autoComplete="current-password"
         />
+        <p className="text-left text-sm">
+          <Link
+            href="/admin/forgot-password"
+            className="text-brand-600 hover:underline"
+          >
+            نسيت كلمة المرور؟
+          </Link>
+        </p>
         <Button type="submit" className="w-full" loading={loading}>
           دخول
         </Button>

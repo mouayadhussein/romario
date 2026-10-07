@@ -92,6 +92,8 @@ INSERT INTO admins (user_id) VALUES ('PASTE-USER-UUID-HERE');
 
 3. سجّل الدخول عبر `/admin/login` (المستخدم يجب أن يكون في جدول `admins` وإلا لن تمر سياسات RLS)
 
+**إعادة تعيين كلمة مرور المدير:** من `/admin/login` → «نسيت كلمة المرور؟». في Supabase → Authentication → URL Configuration أضف إلى **Redirect URLs** مسار `/auth/callback` (مثال إنتاج: `https://your-domain.vercel.app/auth/callback`) وتأكد أن **Site URL** و`NEXT_PUBLIC_SITE_URL` يطابقان نطاق الإنتاج.
+
 ### 7) التشغيل محلياً
 
 ```bash
@@ -108,6 +110,7 @@ npm run dev
 | `/[branchSlug]` | قائمة الفرع + بحث |
 | `/[branchSlug]/cart` | السلة وإتمام الطلب |
 | `/admin/login` | دخول المدير |
+| `/admin/forgot-password` | طلب رابط إعادة تعيين كلمة مرور المدير |
 | `/admin` | الطلبات (Realtime) |
 | `/admin/branches` | إدارة الفروع |
 | `/admin/branches/[id]` | تصنيفات الفرع |
